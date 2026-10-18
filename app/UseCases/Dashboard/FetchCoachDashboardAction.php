@@ -100,6 +100,7 @@ final class FetchCoachDashboardAction
 
         return QaThread::query()
             ->whereIn('certification_id', $certificationIds)
+            ->whereHas('certification', fn ($query) => $query->published())
             ->where('status', QaThreadStatus::Open)
             ->whereDoesntHave('replies')
             ->count();
@@ -121,6 +122,7 @@ final class FetchCoachDashboardAction
 
         return QaThread::query()
             ->whereIn('certification_id', $certificationIds)
+            ->whereHas('certification', fn ($query) => $query->published())
             ->where('status', QaThreadStatus::Open)
             ->whereDoesntHave('replies')
             ->with(['user', 'certification'])
