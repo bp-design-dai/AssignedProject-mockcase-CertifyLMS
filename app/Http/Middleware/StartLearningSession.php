@@ -15,7 +15,7 @@ use Symfony\Component\HttpFoundation\Response;
  * 教材 Section 閲覧時に LearningSession をサーバ側で自動開始するミドルウェア。
  *
  * 別 Section へ遷移するたびに旧 open セッションを閉じて新規開始する「自動切替」の副作用を担う。
- * 認可通過後 (Controller が描画を終えた後) に実行し、失敗は閲覧の妨げにしないため例外吸収してログのみ残す
+ * 正常応答時のみ (Controller が描画を終えた後) に実行し、失敗は閲覧の妨げにしないため例外吸収してログのみ残す
  * (残骸 open は learning:close-stale-sessions Schedule Command で後追い回収する)。
  */
 final class StartLearningSession
@@ -31,7 +31,7 @@ final class StartLearningSession
         $section = $request->route('section');
         $user = $request->user();
 
-        if ($section instanceof Section && $user !== null) {
+        if ($response->isSuccessful() && $section instanceof Section && $user !== null) {
             try {
                 ($this->startSession)($user, $section);
             } catch (\Throwable $exception) {
