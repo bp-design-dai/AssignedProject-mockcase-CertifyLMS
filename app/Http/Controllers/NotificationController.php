@@ -8,6 +8,7 @@ use App\Http\Requests\Notification\IndexRequest;
 use App\UseCases\Notification\IndexAction;
 use App\UseCases\Notification\MarkAllAsReadAction;
 use App\UseCases\Notification\MarkAsReadAction;
+use App\UseCases\Notification\ShowAction;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -15,6 +16,11 @@ use Illuminate\View\View;
 
 final class NotificationController extends Controller
 {
+    public function show(Request $request, DatabaseNotification $notification, ShowAction $action): View
+    {
+        return view('notifications.show', $action($request->user(), $notification));
+    }
+
     public function index(IndexRequest $request, IndexAction $action): View
     {
         return view('notifications.index', $action($request->user(), $request->validated('tab') ?? 'all'));

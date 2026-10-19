@@ -132,7 +132,9 @@ class NotificationControllerTest extends TestCase
         $this->post(route('notifications.markAsRead', $notification))->assertForbidden();
         $this->post(route('notifications.markAllAsRead'))->assertForbidden();
         $this->get('/api/notifications')->assertNotFound();
-        $this->delete('/notifications/'.$notification->id)->assertNotFound();
+        // S-B-08で同じURLのGET詳細を追加。DELETEは依然未実装のため405となる。
+        $this->delete('/notifications/'.$notification->id)->assertStatus(405);
+        $this->assertDatabaseHas('notifications', ['id' => $notification->id]);
     }
 
     private function store(User $user, array $data = [], bool $read = false, $date = null)
