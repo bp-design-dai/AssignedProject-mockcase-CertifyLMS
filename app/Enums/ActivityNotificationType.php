@@ -10,6 +10,7 @@ enum ActivityNotificationType: string
     case QaReplyReceived = 'qa_reply_received';
     case MeetingReserved = 'meeting_reserved';
     case MeetingCanceled = 'meeting_canceled';
+    case MeetingReminder = 'meeting_reminder';
 
     public function title(): string
     {
@@ -18,6 +19,7 @@ enum ActivityNotificationType: string
             self::QaReplyReceived => '質問に回答が届きました',
             self::MeetingReserved => '面談が予約されました',
             self::MeetingCanceled => '面談がキャンセルされました',
+            self::MeetingReminder => '面談のリマインダー',
         };
     }
 }

@@ -32,7 +32,7 @@ final class MarkAsReadAction
         $url = match ($type) {
             ActivityNotificationType::ChatMessageReceived => $this->resourceUrl($user, ChatRoom::findOrFail($id), 'chat.show'),
             ActivityNotificationType::QaReplyReceived => $this->resourceUrl($user, QaThread::findOrFail($id), 'qa-board.show'),
-            ActivityNotificationType::MeetingReserved, ActivityNotificationType::MeetingCanceled => $this->meetingUrl($user, Meeting::findOrFail($id)),
+            ActivityNotificationType::MeetingReserved, ActivityNotificationType::MeetingCanceled, ActivityNotificationType::MeetingReminder => $this->meetingUrl($user, Meeting::findOrFail($id)),
             default => route('notifications.index'),
         };
 

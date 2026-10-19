@@ -1,0 +1,29 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('meeting_reminder_deliveries', function (Blueprint $table) {
+            $table->ulid('id')->primary();
+            $table->foreignUlid('meeting_id')->constrained('meetings')->cascadeOnDelete();
+            $table->foreignUlid('user_id')->constrained('users')->cascadeOnDelete();
+            $table->string('window', 24);
+            $table->string('channel', 16);
+            $table->timestamp('sent_at')->nullable();
+            $table->timestamps();
+            $table->unique(['meeting_id', 'window', 'user_id', 'channel'], 'meeting_reminder_delivery_unique');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('meeting_reminder_deliveries');
+    }
+};
