@@ -35,6 +35,7 @@
                 <div>
                     <p class="text-xs uppercase tracking-wider text-ink-500">配信件数</p>
                     <p class="mt-1 text-2xl font-display font-bold text-ink-900 tnum">{{ $announcement->dispatched_count }} 件</p>
+                    <p class="mt-1 text-sm text-ink-600">成功 {{ $announcement->dispatched_count }} 件 ／ 失敗 {{ $announcement->failed_count }} 件</p>
                 </div>
                 <div>
                     <p class="text-xs uppercase tracking-wider text-ink-500">配信日時</p>

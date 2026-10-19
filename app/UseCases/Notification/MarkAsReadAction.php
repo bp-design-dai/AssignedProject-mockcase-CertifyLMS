@@ -18,6 +18,13 @@ final class MarkAsReadAction
     public function __invoke(User $user, DatabaseNotification $notification): string
     {
         Gate::forUser($user)->authorize('update', $notification);
+        if (($notification->data['notification_type'] ?? null) === 'admin_announcement') {
+            Gate::forUser($user)->authorize('view', $notification);
+            $notification->markAsRead();
+
+            return route('notifications.show', $notification);
+        }
+
         $type = ActivityNotificationType::tryFrom($notification->data['notification_type'] ?? '');
         $id = $notification->data['resource_id'] ?? null;
 

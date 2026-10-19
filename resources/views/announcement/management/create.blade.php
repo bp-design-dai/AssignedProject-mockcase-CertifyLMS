@@ -23,6 +23,7 @@
         <x-card>
             <form novalidate method="POST" action="{{ route('admin.announcements.store') }}" class="space-y-5">
                 @csrf
+                <input type="hidden" name="idempotency_key" value="{{ $idempotencyKey }}">
 
                 <x-form.input
                     name="title"

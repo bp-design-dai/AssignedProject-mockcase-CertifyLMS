@@ -20,4 +20,9 @@ final class NotificationPolicy
         return $this->viewAny($user) && $notification->notifiable_type === $user->getMorphClass()
             && $notification->notifiable_id === $user->id;
     }
+
+    public function view(User $user, DatabaseNotification $notification): bool
+    {
+        return $this->update($user, $notification) && ($notification->data['notification_type'] ?? null) === 'admin_announcement';
+    }
 }
