@@ -7,6 +7,7 @@ namespace Tests\Feature\Http\QaThread;
 use App\Models\QaReply;
 use App\Models\QaThread;
 use App\Models\User;
+use App\Notifications\ActivityNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -32,7 +33,9 @@ class ReplyTest extends TestCase
         $this->delete(route('qa-board.replies.destroy', [$thread, $reply]))->assertRedirect(route('qa-board.show', $thread));
         $this->assertDatabaseMissing('qa_replies', ['id' => $reply->id]);
         $this->assertDatabaseHas('qa_threads', ['id' => $thread->id]);
-        Notification::assertNothingSent();
+        // S-B-04: 回答作成時のみ投稿者へ通知し、編集・削除では追加通知しない。
+        Notification::assertSentToTimes($thread->user, ActivityNotification::class, 1);
+        $this->assertSame(1, $thread->user->notifications()->count());
     }
 
     public function test_other_student_cannot_edit_or_delete_reply(): void

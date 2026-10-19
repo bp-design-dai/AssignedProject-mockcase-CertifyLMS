@@ -6,6 +6,8 @@ namespace App\Http\Controllers;
 
 use App\Enums\EnrollmentStatus;
 use App\Enums\MeetingStatus;
+use App\Events\MeetingCanceled;
+use App\Events\MeetingReserved;
 use App\Exceptions\MeetingQuota\InsufficientMeetingQuotaException;
 use App\Exceptions\Mentoring\MeetingAlreadyStartedException;
 use App\Exceptions\Mentoring\MeetingNoAvailableCoachException;
@@ -212,6 +214,7 @@ class MeetingController extends Controller
 
             $transaction = ($consumeAction)($student, $meeting->id);
             $meeting->update(['meeting_quota_transaction_id' => $transaction->id]);
+            DB::afterCommit(fn () => MeetingReserved::dispatch($meeting));
 
             return $meeting->fresh();
         });
@@ -248,6 +251,7 @@ class MeetingController extends Controller
                 'canceled_by_user_id' => $actor->id,
                 'canceled_at' => now(),
             ]);
+            DB::afterCommit(fn () => MeetingCanceled::dispatch($locked));
         });
 
         return redirect()

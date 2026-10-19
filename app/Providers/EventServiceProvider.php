@@ -6,6 +6,11 @@ namespace App\Providers;
 
 use App\Events\CertificationCoachAttached;
 use App\Events\CertificationCoachDetached;
+use App\Events\ChatMessageSent;
+use App\Events\MeetingCanceled;
+use App\Events\MeetingReserved;
+use App\Events\QaReplyCreated;
+use App\Listeners\SendActivityNotification;
 use App\Listeners\SyncChatMembersOnCoachAssignmentChanged;
 use App\Listeners\UpdateLastLoginAt;
 use Illuminate\Auth\Events\Login;
@@ -22,6 +27,10 @@ class EventServiceProvider extends ServiceProvider
      * @var array<class-string, array<int, class-string>>
      */
     protected $listen = [
+        ChatMessageSent::class => [SendActivityNotification::class],
+        QaReplyCreated::class => [SendActivityNotification::class],
+        MeetingReserved::class => [SendActivityNotification::class],
+        MeetingCanceled::class => [SendActivityNotification::class],
         Registered::class => [
             SendEmailVerificationNotification::class,
         ],
