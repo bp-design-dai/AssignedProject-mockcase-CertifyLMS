@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\UseCases\QaReply;
 
+use App\Events\QaReplyCreated;
 use App\Models\QaReply;
 use App\Models\QaThread;
 use App\Models\User;
@@ -19,7 +20,10 @@ final class StoreAction
             $locked = QaThread::query()->lockForUpdate()->findOrFail($thread->id);
             Gate::forUser($user)->authorize('create', [QaReply::class, $locked]);
 
-            return $locked->replies()->create(['user_id' => $user->id, 'body' => $validated['body']]);
+            $reply = $locked->replies()->create(['user_id' => $user->id, 'body' => $validated['body']]);
+            DB::afterCommit(fn () => QaReplyCreated::dispatch($reply));
+
+            return $reply;
         });
     }
 }
