@@ -9,6 +9,7 @@ use App\Enums\ContentStatus;
 use App\Models\Part;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -16,7 +17,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  *
  * 公開済 Chapter 一覧 + Part / 資格の Published 確認 (非公開なら 404) に加え、
  * 各 Chapter の Section 総数 / 読了済 Section 数 を 1 ショット SQL で集計して Blade に渡す
- * (Chapter 完了バッジの表示用)。受講生が当該資格に未登録の場合は完了数 0 として扱う。
+ * (Chapter 完了バッジの表示用)。当該資格を受講中 / 合格の受講生のみ閲覧を許可する。
  */
 final class ShowPartAction
 {
@@ -31,6 +32,8 @@ final class ShowPartAction
             || $part->certification?->status !== CertificationStatus::Published) {
             throw new NotFoundHttpException;
         }
+
+        Gate::forUser($student)->authorize('learning.part.view', $part);
 
         $chapters = $part->chapters()
             ->where('status', ContentStatus::Published->value)
