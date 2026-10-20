@@ -18,6 +18,7 @@ use App\Http\Controllers\EnrollmentManagementController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LearningHourTargetController;
 use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\MeetingPackController;
 use App\Http\Controllers\MeetingQuotaHistoryController;
 use App\Http\Controllers\MockExamAnswerController;
 use App\Http\Controllers\MockExamCatalogController;
@@ -169,6 +170,14 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
     Route::post('users/{user}/withdraw', [UserController::class, 'withdraw'])->name('admin.users.withdraw');
     Route::post('users/{user}/extend-course', [UserController::class, 'extendCourse'])->name('admin.users.extendCourse');
     Route::post('users/{user}/grant-meeting-quota', [UserController::class, 'grantMeetingQuota'])->name('admin.users.grantMeetingQuota');
+
+    // 追加面談パックのマスタ管理（決済・購入処理は別機能）
+    Route::resource('meeting-packs', MeetingPackController::class)
+        ->parameters(['meeting-packs' => 'plan'])
+        ->names('admin.meeting-packs');
+    Route::post('meeting-packs/{plan}/publish', [MeetingPackController::class, 'publish'])->name('admin.meeting-packs.publish');
+    Route::post('meeting-packs/{plan}/archive', [MeetingPackController::class, 'archive'])->name('admin.meeting-packs.archive');
+    Route::post('meeting-packs/{plan}/unarchive', [MeetingPackController::class, 'unarchive'])->name('admin.meeting-packs.unarchive');
 
     // 招待管理
     Route::post('invitations', [InvitationController::class, 'store'])->name('admin.invitations.store');
