@@ -9,6 +9,7 @@ use App\Enums\ContentStatus;
 use App\Models\Chapter;
 use App\Models\SectionProgress;
 use App\Models\User;
+use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -32,6 +33,8 @@ final class ShowChapterAction
             || $chapter->part->certification?->status !== CertificationStatus::Published) {
             throw new NotFoundHttpException;
         }
+
+        Gate::forUser($student)->authorize('learning.chapter.view', $chapter);
 
         $sections = $chapter->sections()
             ->where('status', ContentStatus::Published->value)

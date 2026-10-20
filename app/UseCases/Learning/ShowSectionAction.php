@@ -11,6 +11,7 @@ use App\Models\SectionProgress;
 use App\Models\User;
 use App\Services\MarkdownRenderingService;
 use App\Services\SectionQuestionScoreService;
+use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -41,6 +42,8 @@ final class ShowSectionAction
             || $part->certification?->status !== CertificationStatus::Published) {
             throw new NotFoundHttpException;
         }
+
+        Gate::forUser($student)->authorize('learning.section.view', $section);
 
         $siblingSections = $chapter->sections()
             ->where('status', ContentStatus::Published->value)
