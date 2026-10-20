@@ -10,6 +10,9 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * 追加面談購入用の SKU マスタ。受講生が dashboard から購入する都度購入型の面談回数パック。
@@ -57,6 +60,19 @@ class MeetingPack extends Model
     public function updatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by_user_id');
+    }
+
+    /** Paymentは追加面談購入機能の所有。関連の利用は導入後に限る。 */
+    public function payments(): HasMany
+    {
+        return $this->hasMany('App\\Models\\Payment', 'meeting_pack_id');
+    }
+
+    public function hasPurchaseHistory(): bool
+    {
+        // 決済状態や将来のModelのグローバルスコープに関係なく、全履歴を保護する。
+        return Schema::hasTable('payments')
+            && DB::table('payments')->where('meeting_pack_id', $this->id)->exists();
     }
 
     /**
