@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Route;
  * 担当資格に紐付く Enrollment 一覧(certification.coaches 経由) + 今日 / 明日の面談予約 +
  * 未読 chat 件数 + 未読 chat ルーム上位 5 件 + 未回答 Q&A 件数 + 直近 Q&A 上位 5 件 を集約する。
  *
- * 担当受講生一覧は表示専用(ソートなし、最終活動日は担当受講生ごとに最終学習セッションから取得)。
+ * 担当受講生一覧は表示専用(ソートなし、関連情報と最終学習セッションの開始日時を一括取得)。
  * 弱点カテゴリ集約 / 受講生メモ表示 / 滞留検知は本ロールでは表示しない(個別画面で対応)。
  *
  * @see DashboardController::index()
@@ -42,13 +42,11 @@ final class FetchCoachDashboardAction
         $coachingCertificationIds = $coach->coachingCertificationIds();
 
         $assignedEnrollments = Enrollment::query()
+            ->with(['user', 'certification'])
+            ->withMax('learningSessions as last_activity_at', 'started_at')
             ->whereIn('certification_id', $coachingCertificationIds)
             ->whereIn('status', [EnrollmentStatus::Learning, EnrollmentStatus::Passed])
             ->get();
-
-        foreach ($assignedEnrollments as $enrollment) {
-            $enrollment->last_activity_at = $enrollment->learningSessions()->max('started_at');
-        }
 
         $todayAndTomorrowMeetings = Meeting::query()
             ->where('coach_id', $coach->id)
