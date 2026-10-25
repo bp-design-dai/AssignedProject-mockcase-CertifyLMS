@@ -44,6 +44,9 @@ use App\Http\Controllers\SectionQuestionController;
 use App\Http\Controllers\SectionQuizController;
 use App\Http\Controllers\SectionQuizResultController;
 use App\Http\Controllers\Settings\AvailabilityController as SettingsAvailabilityController;
+use App\Http\Controllers\Settings\AvatarController as SettingsAvatarController;
+use App\Http\Controllers\Settings\PasswordController as SettingsPasswordController;
+use App\Http\Controllers\Settings\ProfileController as SettingsProfileController;
 use App\Http\Controllers\Settings\SettingsDefaultEnrollmentController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WeakDrillController;
@@ -70,6 +73,13 @@ Route::post('/onboarding/{invitation}', [OnboardingController::class, 'store'])
 // 認証後の全ロール共通ルート
 // ============================================================
 Route::middleware('auth')->group(function () {
+    // 本人用設定。修了済み受講生を含め、全ロールが利用できる。
+    Route::get('settings/profile', [SettingsProfileController::class, 'edit'])->name('settings.profile.edit');
+    Route::patch('settings/profile', [SettingsProfileController::class, 'update'])->name('settings.profile.update');
+    Route::post('settings/avatar', [SettingsAvatarController::class, 'store'])->name('settings.avatar.store');
+    Route::delete('settings/avatar', [SettingsAvatarController::class, 'destroy'])->name('settings.avatar.destroy');
+    Route::put('settings/password', [SettingsPasswordController::class, 'update'])->name('settings.password.update');
+
     // 通知は本人分のみ。配信対象・既読操作の認可はPolicyで保証する。
     Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::get('notifications/{notification}', [NotificationController::class, 'show'])->name('notifications.show');
