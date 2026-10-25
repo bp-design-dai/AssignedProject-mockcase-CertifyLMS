@@ -23,6 +23,7 @@ final class IndexAction
     {
         return Enrollment::query()
             ->forUser($student)
+            ->withCount('goals')
             ->with([
                 'certification.category',
                 'certification.coaches',
