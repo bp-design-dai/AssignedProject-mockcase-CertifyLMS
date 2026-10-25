@@ -148,6 +148,11 @@ class Enrollment extends Model
         return $this->hasMany(EnrollmentGoal::class)->displayOrder();
     }
 
+    public function notes(): HasMany
+    {
+        return $this->hasMany(EnrollmentNote::class);
+    }
+
     protected static function booted(): void
     {
         // 受講解除はSoftDeleteのため、外部キーだけでは配下の目標は消えない。
