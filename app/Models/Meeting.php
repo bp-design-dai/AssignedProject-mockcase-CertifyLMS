@@ -40,9 +40,17 @@ class Meeting extends Model
         'meeting_url_snapshot',
         'completed_at',
         'meeting_quota_transaction_id',
+        'google_calendar_credential_id',
+        'google_calendar_event_id',
+        'google_calendar_created_at',
+        'google_calendar_deleted_at',
     ];
 
+    protected $hidden = ['google_calendar_credential_id', 'google_calendar_event_id'];
+
     protected $casts = [
+        'google_calendar_created_at' => 'datetime',
+        'google_calendar_deleted_at' => 'datetime',
         'status' => MeetingStatus::class,
         'scheduled_at' => 'datetime',
         'canceled_at' => 'datetime',

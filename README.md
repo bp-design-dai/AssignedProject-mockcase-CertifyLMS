@@ -241,3 +241,63 @@ sail bin pint --test     # 整形漏れの確認（CI 相当のチェック）
 - `PUSHER_*` — チャットのリアルタイム配信に使用します。有効にする場合は Pusher のキーを取得して設定し、`BROADCAST_DRIVER=pusher` に変更してください。未設定（既定の `BROADCAST_DRIVER=log`）でもメッセージの送受信自体は動作し、相手画面へのリアルタイム反映のみ行われません
 
 新しい環境変数やセットアップ手順を追加した場合は、`.env.example` と本 README に追記し、チームの誰でも環境を再現できる状態を保ってください。
+
+
+## Google Calendar連携（S-A-01）
+
+コーチ本人が「設定 → 面談設定」からGoogleのプライマリカレンダーを任意連携できます。
+受講生・管理者による連携、カレンダー選択、Google Meet自動生成、過去予約の遡及同期、双方向同期は対象外です。
+
+### 初回セットアップ（Googleの本人操作）
+
+1. 検証用GoogleアカウントとGoogle Cloudプロジェクトを用意し、**Google Calendar API**を有効化します。
+2. Google Auth Platform（OAuth同意画面）のアプリ名・サポートメール等を設定し、Audienceを組織要件に合わせます。ExternalのTestingで検証する場合は、連携する検証用Googleアカウントをテストユーザーへ追加します。
+3. Data Accessに以下の2スコープを追加します。FreeBusyは予定の詳細を取得せず、終日・繰り返し・「予定なし」の扱いをGoogle側のFreeBusy判定に委ねます。
+   - `https://www.googleapis.com/auth/calendar.freebusy`
+   - `https://www.googleapis.com/auth/calendar.events.owned`
+4. OAuthクライアントを「ウェブアプリケーション」として作成します。承認済みリダイレクトURIはローカル検証なら **`http://localhost:8000/settings/google-calendar/callback`** です。本番ではHTTPSの実際のURLを登録し、下記設定と完全一致させます。
+5. Client ID・Client Secretは本人が手元の`.env`へ入力します。チャット・PR・スクリーンショット・ログへ転記しないでください。
+
+```dotenv
+GOOGLE_CALENDAR_CLIENT_ID=
+GOOGLE_CALENDAR_CLIENT_SECRET=
+GOOGLE_CALENDAR_REDIRECT_URI=http://localhost:8000/settings/google-calendar/callback
+```
+
+既存環境には追加マイグレーションだけを適用します（`migrate:fresh`や既存データ削除は不要）。設定キャッシュを使用している環境では設定変更後に再生成してください。
+
+```bash
+sail artisan migrate
+sail npm run build
+# 設定キャッシュを運用している環境のみ
+sail artisan config:cache
+```
+
+未設定・未連携の場合、従来の面談機能はGoogle通信なしで利用できます。未設定の連携開始は設定確認メッセージを表示します。
+Googleへのログイン・本人認証・同意・秘密情報の入力は利用者本人が実施します。実API検証は既存の私用予定を持たない検証アカウントで行ってください。
+GoogleのTesting公開状態やOAuthポリシーによるトークン有効期間・本番審査の要否は運用開始前に確認してください。
+
+### 処理・失敗時の動作
+
+- OAuthはコーチのログインセッションに紐付く10分・1回限りのstateとPKCEで検証し、戻り先は面談設定へ固定します。Googleから取得したaccess/refresh tokenと有効期限を、本人に一意な`google_calendar_credentials`へ保存します。
+- 期限前30秒から自動更新します。保存期限より早くAPIが401を返した場合も、1回だけ更新して再試行します。恒久的な認証失敗は再連携が必要な状態にし、同じ連携世代の認証エラー通知は1件だけ保存します。通信障害は再連携必須にせず、次の操作で再度更新を試みます。
+- FreeBusyで空き枠を絞り、予約のコーチ行→受講生行ロック取得後にも再確認します。Google側が埋まっていれば409で別時刻を案内します。通信失敗はLMS判定で継続し、受講生に注意を表示します。呼出しは接続2秒・全体5秒に制限します。
+- 面談と回数消費・返却は従来のTransactionで確定し、その`afterCommit`イベントから同期します。Googleへの作成・削除は元のLMSのTransactionが確定してから行います。
+- 連携世代IDと決定的なGoogle予定IDを予約Transaction中に保存します。同期は別Transactionでコーチ行→面談行をロックして作成・削除・解除との競合を直列化します。Google操作自体はDBロールバックできませんが、元の予約/キャンセルを戻さず、保存済みIDで予定を特定できます。応答消失時の再発火でも同じIDを使い、既存の同一LMS予定なら重複作成しません。
+- 件名は`Certify LMS面談｜受講生名`、60分の開始/終了日時、予約時の固定面談URLを登録します。attendeesとconferenceDataは指定せず、`sendUpdates=none`のため受講生のGoogle招待メールやMeet URL生成は行いません。
+- Googleの登録・削除失敗はコーチ本人のアプリ内通知と秘密情報を含めないログに記録します。失敗通知は連携世代・操作・面談の組で重複防止します。LMSでキャンセルが完了したことと、Google予定が残った可能性を区別して案内します。
+- 解除は本人のローカルトークンを削除し、既存Google予定とLMS履歴を残します。解除後のキャンセルもGoogle予定を削除しません。再連携は新しい世代となり、古い世代の面談を別アカウントで操作しません。Googleアカウント側のアプリ許可も取り消す場合は本人がGoogleの接続管理から実施します。
+- 自動の高度な再送キューはありません。通知で失敗を確認した場合はコーチがGoogleカレンダーとLMSを照合してください。Googleで予定を手動変更してもLMSへ逆同期はしません。
+
+### 保存・本番運用上の推奨
+
+本チケットではトークンの暗号化保存追加は対象外です。ModelのJSONにはaccess/refresh tokenを含めず、Googleのレスポンス本文・私用予定の詳細・認証コード・トークンをログや受講生画面に出しません。
+**本番運用ではDB内トークンの暗号化・暗号鍵管理、DB/バックアップへの最小権限、HTTPS、OAuthスコープとGoogle側の公開審査、トークン失効時の運用を整備してください。** 暗号化対応は別途行います。
+
+### モック検証
+
+`GoogleCalendarGateway`を差し替えて外部通信なしで検証できます。SDK境界のテストはGuzzleのMockHandlerを使用し、実Googleへ接続しません。
+`GoogleCalendarCredentialFactory`と`GoogleCalendarDemoSeeder`は分離した`testing` DB専用の合成データです。Seederは連携済み/未連携コーチを新規作成し、local/production DBでは実行を拒否します。既存デモコーチにダミートークンを付けません。
+実APIへの連携・終日/繰り返し/予定なし・作成/削除の最終疎通は、本人がOAuth設定を用意した後に検証アカウントで実施します。
+
+公式資料: [OAuth Web Server](https://developers.google.com/identity/protocols/oauth2/web-server)、[FreeBusy](https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query)、[予定作成](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert)、[予定削除](https://developers.google.com/workspace/calendar/api/v3/reference/events/delete)。

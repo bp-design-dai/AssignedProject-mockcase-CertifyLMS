@@ -106,6 +106,7 @@
                 <h3 class="font-display text-base font-bold text-ink-900" data-slots-title>日付を選択してください</h3>
                 <p class="text-xs text-ink-500 mt-1">所要時間: 60 分(固定) / 各枠は先着順 / コーチは自動割当</p>
 
+                <p class="mt-3 hidden text-sm text-warning-700" role="status" data-calendar-warning></p>
                 <div class="mt-4 grid grid-cols-2 gap-2" data-slots-grid>
                     {{-- 時刻スロットは JS で描画 --}}
                 </div>

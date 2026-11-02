@@ -12,6 +12,7 @@ use App\Events\MeetingReserved;
 use App\Events\QaReplyCreated;
 use App\Listeners\SendActivityNotification;
 use App\Listeners\SyncChatMembersOnCoachAssignmentChanged;
+use App\Listeners\SyncMeetingGoogleCalendar;
 use App\Listeners\UpdateLastLoginAt;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Registered;
@@ -29,8 +30,8 @@ class EventServiceProvider extends ServiceProvider
     protected $listen = [
         ChatMessageSent::class => [SendActivityNotification::class],
         QaReplyCreated::class => [SendActivityNotification::class],
-        MeetingReserved::class => [SendActivityNotification::class],
-        MeetingCanceled::class => [SendActivityNotification::class],
+        MeetingReserved::class => [SendActivityNotification::class, SyncMeetingGoogleCalendar::class],
+        MeetingCanceled::class => [SendActivityNotification::class, SyncMeetingGoogleCalendar::class],
         Registered::class => [
             SendEmailVerificationNotification::class,
         ],

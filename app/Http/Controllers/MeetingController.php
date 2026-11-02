@@ -12,6 +12,7 @@ use App\Http\Requests\Meeting\StoreRequest;
 use App\Http\Requests\Meeting\UpsertMemoRequest;
 use App\Models\Enrollment;
 use App\Models\Meeting;
+use App\Services\GoogleCalendarAvailabilityService;
 use App\Services\MeetingQuotaService;
 use App\UseCases\Meeting\CancelAction;
 use App\UseCases\Meeting\FetchAvailabilityAction;
@@ -88,9 +89,12 @@ class MeetingController extends Controller
     {
         $meeting = $action($enrollment, $request->validated());
 
-        return redirect()
-            ->route('meetings.show', $meeting)
-            ->with('success', '面談を予約しました。');
+        $response = redirect()->route('meetings.show', $meeting)->with('success', '面談を予約しました。');
+        if ($warning = $action->calendarWarning()) {
+            $response->with('warning', $warning);
+        }
+
+        return $response;
     }
 
     public function cancel(Meeting $meeting, CancelAction $action): RedirectResponse
@@ -123,6 +127,7 @@ class MeetingController extends Controller
                 'slot_end' => $slot['slot_end']->toIso8601String(),
                 'available_coach_count' => $slot['available_coach_count'],
             ])->all(),
+            ...($data['calendar_warning'] ? ['warning' => GoogleCalendarAvailabilityService::WARNING] : []),
         ]);
     }
 }

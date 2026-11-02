@@ -25,6 +25,13 @@ final class MarkAsReadAction
             return route('notifications.show', $notification);
         }
 
+        if (($notification->data['notification_type'] ?? null) === 'google_calendar_error') {
+            abort_unless($user->role === UserRole::Coach, 403);
+            $notification->markAsRead();
+
+            return route('settings.availability.index');
+        }
+
         $type = ActivityNotificationType::tryFrom($notification->data['notification_type'] ?? '');
         $id = $notification->data['resource_id'] ?? null;
 
