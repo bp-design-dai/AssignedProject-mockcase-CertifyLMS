@@ -16,8 +16,8 @@ use App\Models\Meeting;
 use App\Models\MeetingQuotaTransaction;
 use App\Models\User;
 use App\Services\MeetingQuotaService;
+use App\UseCases\Meeting\CancelAction;
 use App\UseCases\MeetingQuota\ConsumeQuotaAction;
-use App\UseCases\MeetingQuota\RefundQuotaAction;
 use App\UseCases\Notification\SendMeetingRemindersAction;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
@@ -155,7 +155,7 @@ class CancelQuotaRegressionTest extends TestCase
         $stale = $meeting->fresh();
         $this->actingAs($meeting->student)->post(route('meetings.cancel', $meeting))->assertRedirect();
         try {
-            app(MeetingController::class)->cancel($stale, app(RefundQuotaAction::class));
+            app(MeetingController::class)->cancel($stale, app(CancelAction::class));
             $this->fail('ロック後の状態確認で二重キャンセルを拒否しませんでした。');
         } catch (MeetingStatusTransitionException $exception) {
             $this->assertSame(409, $exception->getStatusCode());
