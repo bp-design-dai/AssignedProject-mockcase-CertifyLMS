@@ -114,6 +114,11 @@
                     既存の予約は LMS 内には残り、Google 側のイベントは削除されません。
                 </p>
 
+                @if ($credential->requires_reconnect)
+                    <x-alert type="warning">認証を更新できませんでした。Googleカレンダーを再連携してください。</x-alert>
+                    <x-link-button :href="route('settings.google-calendar.redirect')" variant="primary" size="sm">再連携する</x-link-button>
+                @endif
+
                 <form novalidate method="POST" action="{{ route('settings.google-calendar.destroy') }}">
                     @csrf
                     @method('DELETE')

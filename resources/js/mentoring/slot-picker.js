@@ -54,6 +54,8 @@ class SlotPicker {
         this.selectedDate = null;
         this.selectedSlot = null;
         this.slotCache = new Map();
+        this.warningCache = new Map();
+        this.warningEl = this.form?.querySelector('[data-calendar-warning]');
 
         this.bindEvents();
         this.renderCalendar();
@@ -144,6 +146,10 @@ class SlotPicker {
             return;
         }
 
+        if (this.warningEl) {
+            this.warningEl.textContent = '';
+            this.warningEl.classList.add('hidden');
+        }
         const key = ymd(date);
         if (this.slotsTitle) {
             this.slotsTitle.textContent = `${date.getMonth() + 1}月${date.getDate()}日 (${WEEKDAY_JA[date.getDay()]}) の空き枠`;
@@ -152,9 +158,16 @@ class SlotPicker {
         this.slotsEmpty?.classList.add('hidden');
 
         try {
-            const slots = this.slotCache.has(key)
-                ? this.slotCache.get(key)
-                : (await getJson(`${this.endpoint}?date=${encodeURIComponent(key)}`)).slots ?? [];
+            if (!this.slotCache.has(key)) {
+                const result = await getJson(`${this.endpoint}?date=${encodeURIComponent(key)}`);
+                this.slotCache.set(key, result.slots ?? []);
+                this.warningCache.set(key, result.warning ?? '');
+            }
+            const slots = this.slotCache.get(key);
+            if (this.warningEl) {
+                this.warningEl.textContent = this.warningCache.get(key) ?? '';
+                this.warningEl.classList.toggle('hidden', !this.warningEl.textContent);
+            }
             this.slotCache.set(key, slots);
             this.renderSlots(slots);
         } catch (error) {

@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Contracts\GoogleCalendarGateway;
+use App\Integrations\GoogleCalendar\GoogleApiCalendarGateway;
 use App\View\Composers\EnrollmentSwitcherComposer;
 use App\View\Composers\NotificationBadgeComposer;
 use App\View\Composers\SectionPageMetaComposer;
 use App\View\Composers\SidebarBadgeComposer;
+use GuzzleHttp\Client;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -15,7 +18,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->bind(GoogleCalendarGateway::class, fn () => new GoogleApiCalendarGateway(new Client(['connect_timeout' => 2, 'timeout' => 5])));
     }
 
     public function boot(): void

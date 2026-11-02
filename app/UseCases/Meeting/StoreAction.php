@@ -13,6 +13,8 @@ use App\Models\Enrollment;
 use App\Models\Meeting;
 use App\Models\User;
 use App\Services\CoachMeetingLoadService;
+use App\Services\GoogleCalendarAvailabilityService;
+use App\Services\GoogleCalendarSyncService;
 use App\Services\MeetingAvailabilityService;
 use App\Services\MeetingQuotaService;
 use App\UseCases\MeetingQuota\ConsumeQuotaAction;
@@ -22,16 +24,26 @@ use Illuminate\Support\Facades\DB;
 
 final class StoreAction
 {
+    private bool $calendarFallback = false;
+
+    public function calendarWarning(): ?string
+    {
+        return $this->calendarFallback ? GoogleCalendarAvailabilityService::WARNING : null;
+    }
+
     public function __construct(
         private readonly MeetingAvailabilityService $availabilityService,
         private readonly CoachMeetingLoadService $coachLoadService,
         private readonly MeetingQuotaService $quotaService,
         private readonly ConsumeQuotaAction $consumeAction,
+        private readonly GoogleCalendarAvailabilityService $calendar,
+        private readonly GoogleCalendarSyncService $calendarSync,
     ) {}
 
     /** @param array{scheduled_at: string, topic: string} $data 検証・認可済みの予約入力 */
     public function __invoke(Enrollment $enrollment, array $data): Meeting
     {
+        $this->calendarFallback = false;
         $scheduledAt = Carbon::parse($data['scheduled_at']);
         $topic = $data['topic'];
         $student = $enrollment->user;
@@ -54,6 +66,12 @@ final class StoreAction
                 throw new MeetingNoAvailableCoachException;
             }
 
+            $google = $this->calendar->filterCoaches($candidates, $scheduledAt);
+            $this->calendarFallback = $google['warning'];
+            $candidates = $google['coaches'];
+            if ($candidates->isEmpty()) {
+                throw new MeetingNoAvailableCoachException;
+            }
             $coach = $this->coachLoadService->leastLoadedCoach($candidates);
 
             $meeting = Meeting::create([
@@ -66,6 +84,7 @@ final class StoreAction
                 'meeting_url_snapshot' => $coach->meeting_url,
             ]);
 
+            $this->calendarSync->prepare($meeting);
             $transaction = ($this->consumeAction)($student, $meeting->id);
             $meeting->update(['meeting_quota_transaction_id' => $transaction->id]);
             DB::afterCommit(fn () => MeetingReserved::dispatch($meeting));
