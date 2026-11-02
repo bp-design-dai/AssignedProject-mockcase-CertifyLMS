@@ -25,10 +25,11 @@ final class MeetingAvailabilityService
      * 指定 Certification の担当コーチ集合について、指定日 1 日分の 60 分単位空きスロットを返す。
      *
      * 1 リクエストあたり availability 1 クエリ + meetings 1 クエリ で完結させる。
+     * includeBooked は予約時の時間枠検証専用。通常の空き枠表示は予約済み枠を除外する。
      *
      * @return Collection<int, array{slot_start: Carbon, slot_end: Carbon, available_coach_count: int}>
      */
-    public function slotsForCertification(Certification $certification, Carbon $date): Collection
+    public function slotsForCertification(Certification $certification, Carbon $date, bool $includeBooked = false): Collection
     {
         $dayStart = $date->copy()->startOfDay();
         $dayEnd = $date->copy()->endOfDay();
@@ -47,7 +48,7 @@ final class MeetingAvailabilityService
             ->where('is_active', true)
             ->get();
 
-        $existingMeetings = Meeting::query()
+        $existingMeetings = $includeBooked ? collect() : Meeting::query()
             ->whereIn('coach_id', $coachIds)
             ->whereBetween('scheduled_at', [$dayStart, $dayEnd])
             ->whereIn('status', [MeetingStatus::Reserved->value, MeetingStatus::Completed->value])
@@ -99,7 +100,8 @@ final class MeetingAvailabilityService
      */
     public function validateSlot(Certification $certification, Carbon $scheduledAt): void
     {
-        $slots = $this->slotsForCertification($certification, $scheduledAt->copy()->startOfDay());
+        // 設定された時間枠かを検証する。占有状況は予約処理のコーチロック後に409として判定する。
+        $slots = $this->slotsForCertification($certification, $scheduledAt->copy()->startOfDay(), includeBooked: true);
 
         $matched = $slots->contains(
             fn (array $slot) => $slot['slot_start']->equalTo($scheduledAt) && $slot['available_coach_count'] > 0,

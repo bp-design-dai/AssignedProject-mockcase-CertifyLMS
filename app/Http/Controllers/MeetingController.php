@@ -28,7 +28,6 @@ use App\Services\MeetingQuotaService;
 use App\UseCases\MeetingQuota\ConsumeQuotaAction;
 use App\UseCases\MeetingQuota\RefundQuotaAction;
 use Carbon\Carbon;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
@@ -160,7 +159,7 @@ class MeetingController extends Controller
 
     /**
      * 受講生の予約申請。残面談回数を確認し、空き枠から過去実績最少のコーチを自動割当して reserved で確定する。
-     * 同時刻 race condition は (coach_id, scheduled_at) UNIQUE 違反として検知し 409 へ変換する。
+     * コーチ行と受講生行をロック後に予約可否を確認し、競合は空きコーチなし(409)として拒否する。
      */
     public function store(
         Enrollment $enrollment,
@@ -173,10 +172,12 @@ class MeetingController extends Controller
         $scheduledAt = Carbon::parse($request->validated('scheduled_at'));
         $topic = $request->validated('topic');
         $student = $enrollment->user;
+        $certification = $enrollment->certification;
 
         $meeting = DB::transaction(function () use (
             $enrollment,
             $student,
+            $certification,
             $scheduledAt,
             $topic,
             $availabilityService,
@@ -184,33 +185,33 @@ class MeetingController extends Controller
             $quotaService,
             $consumeAction,
         ) {
+            // 予約がまだ無い枠も保護する。全候補コーチを同じID順でロックし、
+            // 最初の通常SELECTより前に待機を終える(REPEATABLE READの古いスナップショットを避ける)。
+            $certification->coaches()->orderBy('users.id')->lockForUpdate()->get();
+            $student = User::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
+
             if ($quotaService->remaining($student) < 1) {
                 throw new InsufficientMeetingQuotaException;
             }
 
-            $availabilityService->validateSlot($enrollment->certification, $scheduledAt);
+            $availabilityService->validateSlot($certification, $scheduledAt);
 
-            $candidates = $this->findAvailableCoaches($enrollment->certification, $scheduledAt);
+            $candidates = $this->findAvailableCoaches($certification, $scheduledAt);
             if ($candidates->isEmpty()) {
                 throw new MeetingNoAvailableCoachException;
             }
 
             $coach = $coachLoadService->leastLoadedCoach($candidates);
 
-            try {
-                $meeting = Meeting::create([
-                    'enrollment_id' => $enrollment->id,
-                    'coach_id' => $coach->id,
-                    'student_id' => $student->id,
-                    'scheduled_at' => $scheduledAt,
-                    'status' => MeetingStatus::Reserved->value,
-                    'topic' => $topic,
-                    'meeting_url_snapshot' => $coach->meeting_url,
-                ]);
-            } catch (UniqueConstraintViolationException $e) {
-                // 同時刻に他受講生が先行予約した race condition: UNIQUE(coach_id, scheduled_at) で弾かれた
-                throw new MeetingNoAvailableCoachException($e);
-            }
+            $meeting = Meeting::create([
+                'enrollment_id' => $enrollment->id,
+                'coach_id' => $coach->id,
+                'student_id' => $student->id,
+                'scheduled_at' => $scheduledAt,
+                'status' => MeetingStatus::Reserved->value,
+                'topic' => $topic,
+                'meeting_url_snapshot' => $coach->meeting_url,
+            ]);
 
             $transaction = ($consumeAction)($student, $meeting->id);
             $meeting->update(['meeting_quota_transaction_id' => $transaction->id]);
@@ -237,6 +238,8 @@ class MeetingController extends Controller
         $actor = auth()->user();
 
         DB::transaction(function () use ($meeting, $actor, $refundAction) {
+            // 予約と同じコーチ→面談の順序でロックし、枠の開放と再予約を直列化する。
+            User::withTrashed()->whereKey($meeting->coach_id)->lockForUpdate()->firstOrFail();
             $locked = Meeting::query()->whereKey($meeting->id)->lockForUpdate()->first();
             if ($locked === null || $locked->status !== MeetingStatus::Reserved) {
                 throw MeetingStatusTransitionException::forCancel();
