@@ -7,11 +7,6 @@
     $historyToday = [];
     $history7days = [];
     $history30days = [];
-    $historyAll = auth()->user()->aiChatConversations()
-        ->with(['enrollment.certification', 'section'])
-        ->orderByDesc('last_message_at')
-        ->limit(30)
-        ->get();
     foreach ($historyAll as $h) {
         if ($h->last_message_at?->isToday()) {
             $historyToday[] = $h;
@@ -21,7 +16,6 @@
             $history30days[] = $h;
         }
     }
-    $model = (string) config('ai-chat.gemini.model', 'gemini-2.5-flash');
 @endphp
 
 @section('content')
@@ -41,7 +35,7 @@
         <aside class="hidden lg:flex flex-col bg-[#FCFEFD] border-r border-subtle overflow-y-auto">
             <div class="px-5 pt-5 pb-3 flex items-baseline gap-2">
                 <h2 class="font-display font-bold text-base text-ink-900 tracking-tight">AI 相談</h2>
-                <span class="ml-auto text-[11px] text-ink-500 tabular-nums">{{ number_format($historyAll->count()) }} 会話</span>
+                <span class="ml-auto text-[11px] text-ink-500 tabular-nums">{{ number_format($historyAll->total()) }} 会話</span>
             </div>
 
             <button type="button" data-modal-trigger="new-ai-chat-modal"
@@ -77,6 +71,7 @@
                     @endif
                 @endforeach
             </div>
+            <div class="px-3 pb-3">{{ $historyAll->links() }}</div>
         </aside>
 
         {{-- Conversation column --}}
@@ -98,7 +93,6 @@
                     </div>
                     <div class="flex items-center gap-2 mt-1 flex-wrap">
                         @include('ai-chat._partials.context-badges')
-                        <span class="text-[10px] text-ink-500 font-mono">{{ $model }}</span>
                     </div>
                 </div>
 
@@ -125,9 +119,8 @@
                     <div class="max-w-[760px] mx-auto text-center text-sm text-ink-500 py-12">
                         まだメッセージはありません。下から最初の質問を送ってみよう。
                     </div>
-                @else
-                    @include('ai-chat._partials.message-list')
                 @endif
+                @include('ai-chat._partials.message-list')
             </div>
 
             {{-- Composer --}}
@@ -149,8 +142,14 @@
                     :value="old('title', $conversation->title)"
                     :error="$errors->first('title')"
                     :required="true"
-                    :maxlength="100"
+                    :maxlength="50"
                 />
+                <input type="hidden" name="auto_title" value="0">
+                <label class="mt-3 flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="auto_title" value="1" @checked($conversation->auto_title)>
+                    タイトルを自動更新する
+                </label>
+                <p class="mt-2 text-xs text-ink-500">タイトルを手動変更すると自動更新はOFFになります。</p>
             </form>
         </x-slot:body>
         <x-slot:footer>

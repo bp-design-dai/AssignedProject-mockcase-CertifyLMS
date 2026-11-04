@@ -304,6 +304,11 @@ class User extends Authenticatable
         return 'notifications.'.$this->id;
     }
 
+    public function aiChatConversations(): HasMany
+    {
+        return $this->hasMany(AiChatConversation::class);
+    }
+
     /**
      * 受講中(in_progress) と 卒業(graduated) を「ログイン可能 = 活動アカウント」として扱うスコープ。
      * Fortify の認証通過判定や、管理画面の active 集計に使う。

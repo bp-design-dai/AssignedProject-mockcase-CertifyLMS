@@ -5,17 +5,8 @@
 --}}
 @php
     /** @var \App\Models\AiChatConversation $conversation */
-    $sectionTitle = $conversation->section?->title;
-
-    // 会話に紐づく受講中資格があればそれを、無ければユーザーの既定の受講資格をフォールバック表示する
-    $enrollment = $conversation->enrollment ?? auth()->user()?->defaultEnrollment;
-    $certName = $enrollment !== null
-        && in_array($enrollment->status, [
-            \App\Enums\EnrollmentStatus::Learning,
-            \App\Enums\EnrollmentStatus::Passed,
-        ], true)
-        ? $enrollment->certification?->name
-        : null;
+    $sectionTitle = $conversationContext['section_title'];
+    $certName = $conversationContext['certification_name'];
 @endphp
 
 <div class="flex items-center gap-2 flex-wrap text-[11px]">

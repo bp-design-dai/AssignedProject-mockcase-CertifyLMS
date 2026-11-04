@@ -9,6 +9,9 @@
 
 <form novalidate data-ai-chat-form
     data-conversation-id="{{ $conversation->id }}"
+    data-user-id="{{ auth()->id() }}"
+    data-section-id="{{ $conversationContext['section_id'] }}"
+    data-certification-id="{{ $conversationContext['certification_id'] }}"
     data-store-url="{{ route('ai-chat.conversations.messages.store', $conversation) }}"
     class="max-w-[760px] mx-auto w-full">
     @csrf

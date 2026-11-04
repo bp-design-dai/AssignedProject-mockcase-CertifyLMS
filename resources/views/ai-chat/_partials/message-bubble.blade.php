@@ -1,6 +1,6 @@
 {{--
     メッセージ 1 件分の吹き出し（$message を受け取る）。
-    構成: アバター + 吹き出し本体（本文 / 応答待ちのローディングドット / エラー文）+ メタ行（時刻・応答時間・トークン数）。
+    構成: アバター + 吹き出し本体（本文 / 応答待ちのローディングドット / エラー文）+ 時刻・エラー表示。
     フロント観点: 自分の発言と AI の発言で左右と配色を出し分け。AI 文は素の JS が Markdown をサニタイズ済 HTML に変換して描画。応答待ちはアニメーションのドット表示。
 --}}
 @php
@@ -48,17 +48,7 @@
                     <span class="w-1.5 h-1.5 rounded-full bg-secondary-400 animate-bounce" style="animation-delay: 160ms;"></span>
                     <span class="w-1.5 h-1.5 rounded-full bg-secondary-400 animate-bounce" style="animation-delay: 320ms;"></span>
                 </span>
-            @elseif ($isError && $message->content === '')
-                @php
-                    $errorDetail = (string) ($message->error_detail ?? '');
-                    $errorText = match (true) {
-                        str_contains($errorDetail, '429') => 'Gemini API のリクエスト制限に達しました。1 分ほど待って再試行してください。',
-                        str_contains($errorDetail, '503') || str_contains($errorDetail, '502') || str_contains($errorDetail, '500') => 'Gemini API が一時的に応答していません。少し待って再試行してください。',
-                        default => 'AI が応答できませんでした。しばらく時間をおいて再試行してください。',
-                    };
-                @endphp
-                <div class="whitespace-pre-wrap break-words" data-message-content>{{ $errorText }}</div>
-            @elseif ($isMe)
+            @elseif ($isMe || $isError)
                 <div class="whitespace-pre-wrap break-words" data-message-content>{{ $message->content }}</div>
             @else
                 {{-- assistant メッセージは DOMContentLoaded で Markdown → サニタイズ済 HTML に変換 (resources/js/ai-chat/index.js) --}}
@@ -70,17 +60,12 @@
         <div class="text-[11px] text-ink-400 mt-1 px-0.5 tabular-nums">
             @if ($isError)
                 {{ $message->updated_at?->format('H:i') }} · エラー
-            @elseif (! $isMe && $message->status === \App\Enums\AiChatMessageStatus::Completed)
-                {{ $message->created_at?->format('H:i') }}
-                @if ($message->response_time_ms)
-                    · {{ number_format($message->response_time_ms / 1000, 1) }} s
-                @endif
-                @if ($message->output_tokens)
-                    · {{ number_format($message->output_tokens) }} tokens
-                @endif
             @else
                 {{ $message->created_at?->format('H:i') }}
             @endif
         </div>
+        @if ($isError && $message->replyTo)
+            <button type="button" class="mt-1 text-xs text-secondary-700 underline" data-ai-chat-retry data-retry-content="{{ $message->replyTo->content }}">同じ質問を再送</button>
+        @endif
     </div>
 </li>
