@@ -1,0 +1,30 @@
+/* Keep intrinsic code/table widths inside the floating chat, without changing other prose. */
+[data-ai-chat-widget] [data-ai-chat-messages] {
+    min-width: 0;
+    min-height: 0;
+    overflow-x: hidden;
+}
+
+[data-ai-chat-widget] [data-ai-chat-message-body] {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+[data-ai-chat-widget] [data-ai-chat-message-body] .prose {
+    max-width: 100%;
+}
+
+[data-ai-chat-widget] [data-ai-chat-message-body] pre {
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre;
+    overflow-wrap: normal;
+}
+
+[data-ai-chat-widget] [data-ai-chat-message-body] table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-wrap: normal;
+}

@@ -1,4 +1,4 @@
-import { marked } from 'marked';
+import { Marked, Tokenizer } from 'marked';
 import DOMPurify from 'dompurify';
 
 /**
@@ -6,12 +6,37 @@ import DOMPurify from 'dompurify';
  *
  * - 改行は <br> 化 (LLM が箇条書きの間に改行のみで段落を区切ることがあるため)
  * - GFM 有効 (テーブル / 取り消し線 / タスクリスト)
- * - HTML 直書きは marked 段階で escape し、さらに DOMPurify で再サニタイズ (二重防御)
+ * - HTML を含む解析結果は DOMPurify の許可リストでサニタイズする
  * - 受け取った内容が想定外でエラー化した場合は escape したプレーン文字列を返す
  */
-marked.setOptions({
+const japanese = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+const markdown = new Marked({
     gfm: true,
     breaks: true,
+    tokenizer: {
+        emStrong(src, maskedSrc, prevChar = '') {
+            // Keep the normal tokenizer unless Japanese punctuation makes it skip a nearer closing pair.
+            const standard = Tokenizer.prototype.emStrong.call(this, src, maskedSrc, prevChar);
+            if (this.lexer.state.inRawBlock || !src.startsWith('**') || src.startsWith('***')) return standard || false;
+
+            // Marked masks code, escaped punctuation and link destinations at identical offsets.
+            const masked = maskedSrc.slice(-src.length);
+            if (!masked.startsWith('**')) return standard || false;
+            const end = masked.indexOf('**', 2);
+            if (end < 0 || masked[end + 2] === '*') return standard || false;
+            const text = src.slice(2, end);
+            if (!text || /^(?:\s)|\s$|\n/u.test(text)) return standard || false;
+            const next = [...src.slice(end + 2)][0] ?? '';
+            const adjacentJapanesePunctuation =
+                (japanese.test(prevChar) && /^\p{P}/u.test(text)) ||
+                (/\p{P}$/u.test(text) && japanese.test(next));
+            if (!adjacentJapanesePunctuation) return standard || false;
+
+            if (standard && standard.raw.length <= end + 2) return standard;
+
+            return { type: 'strong', raw: src.slice(0, end + 2), text, tokens: this.lexer.inlineTokens(text) };
+        },
+    },
 });
 
 function escapeHtml(str) {
@@ -30,7 +55,7 @@ function escapeHtml(str) {
 export function renderMarkdown(content) {
     if (content === null || content === undefined || content === '') return '';
     try {
-        const html = marked.parse(String(content));
+        const html = markdown.parse(String(content));
 
         return DOMPurify.sanitize(html, {
             ALLOWED_TAGS: [
