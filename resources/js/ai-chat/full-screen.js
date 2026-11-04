@@ -19,6 +19,30 @@ function initForm() {
     const list = document.querySelector('[data-message-list]');
     const scroller = document.querySelector('[data-message-scroller]');
     const titleEl = document.querySelector('[data-conversation-title]');
+    const renameForm = document.getElementById('rename-ai-chat-form');
+    const renameTitle = renameForm?.querySelector('[name="title"]');
+    const renameAuto = renameForm?.querySelector('[type="checkbox"][name="auto_title"]');
+    const emptyState = document.querySelector('[data-ai-chat-empty-state]');
+    let persistedTitle = titleEl?.textContent.trim() ?? '';
+    let autoEdited = false;
+    renameAuto?.addEventListener('change', () => { autoEdited = true; });
+    renameForm?.addEventListener('submit', () => {
+        // An untouched title must not overwrite a newer value saved while the AI request was in flight.
+        if (renameTitle?.value === persistedTitle) renameTitle.disabled = true;
+    });
+
+    function updateConversation(conversation) {
+        if (!conversation?.title) return;
+        // Keep unsaved manual edits and explicit switch changes when a response arrives.
+        if (renameTitle?.value === persistedTitle) renameTitle.value = conversation.title;
+        if (renameAuto && !autoEdited && typeof conversation.auto_title === 'boolean') {
+            renameAuto.checked = conversation.auto_title;
+        }
+        persistedTitle = conversation.title;
+        if (titleEl) titleEl.textContent = persistedTitle;
+        const parts = document.title.split(' | ');
+        document.title = parts.length > 1 ? `${persistedTitle} | ${parts[parts.length - 1]}` : persistedTitle;
+    }
 
     if (!list) return;
     let tabStorage = null;
@@ -100,12 +124,7 @@ function initForm() {
             clearTyping();
             renderFullScreenMessage(list, msg, { viewerName });
         },
-        onTitleUpdated: ({ title }) => {
-            if (! title) return;
-            if (titleEl) titleEl.textContent = title;
-            const parts = document.title.split(' | ');
-            document.title = parts.length > 1 ? `${title} | ${parts[parts.length - 1]}` : title;
-        },
+        onConversation: updateConversation,
         onError: (err) => {
             clearTyping();
             const errorNode = renderFullScreenMessage(list, err.payload?.assistant_message ?? {
@@ -140,13 +159,14 @@ function initForm() {
         autoResize();
 
         // 送信直後に自分の発言を楽観表示 + AI「考え中」インジケータを出す(応答待ちの無反応を防ぐ)
-        renderFullScreenMessage(list, {
+        const questionNode = renderFullScreenMessage(list, {
             id: 'tmp-user-' + Date.now(),
             role: 'user',
             content,
             status: 'completed',
             created_at: new Date().toISOString(),
         }, { viewerName });
+        if (questionNode) emptyState?.remove();
         currentTyping = appendTyping();
         scrollToBottom();
 

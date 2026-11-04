@@ -116,7 +116,7 @@
             {{-- Messages --}}
             <div class="flex-1 overflow-y-auto px-8 pt-6 pb-3" data-message-scroller>
                 @if ($conversation->messages->isEmpty())
-                    <div class="max-w-[760px] mx-auto text-center text-sm text-ink-500 py-12">
+                    <div data-ai-chat-empty-state class="max-w-[760px] mx-auto text-center text-sm text-ink-500 py-12">
                         まだメッセージはありません。下から最初の質問を送ってみよう。
                     </div>
                 @endif

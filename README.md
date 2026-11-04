@@ -354,3 +354,5 @@ sail exec laravel.test node --test tests/Js/ai-chat-state.test.mjs
 公式資料: [generateContent](https://aistudio.google.com/api-reference/generate-content)、[APIキー](https://aistudio.google.com/docs/api-key)、[モデルの廃止予定](https://aistudio.google.com/docs/deprecations)。
 
 資格紹介ページでは公開されている資格名を相談の文脈として保持します。未登録でも既存の資格紹介ページを閲覧できますが、教材本文は本人の有効な受講登録と既存Gateで許可されたSectionだけを付与します。公開停止後は資格情報も新たなプロンプトに付与しません。
+
+AI相談の画面回帰テストは `sail npm run test:ai-chat` で実行します。既存の状態保持テストに加え、テスト専用のjsdomで実際のフォーム・メッセージDOMと本番のJSを動かし、タイトルの同期・未変更保存・ON/OFF・空状態の解除を確認します。`npm ci`では開発依存もインストールしてください（検証したSail内Nodeは24.14.1）。タイトル未変更時はtitleを再送せず、自動更新設定だけを送ります。入力中のタイトルや明示的なスイッチ操作は、AI回答が到着しても上書きしません。
