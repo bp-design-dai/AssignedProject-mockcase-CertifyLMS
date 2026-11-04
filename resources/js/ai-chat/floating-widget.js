@@ -99,7 +99,7 @@ export function initAiChatWidget() {
         messagesEl.insertAdjacentHTML('beforeend', `
             <div class="flex gap-2 max-w-[86%] ml-auto flex-row-reverse">
                 <span class="w-[26px] h-[26px] rounded-full bg-success-700 text-white inline-flex items-center justify-center text-[10px] font-bold flex-shrink-0">YO</span>
-                <div>
+                <div data-ai-chat-message-body>
                     <div class="bg-secondary-600 text-white rounded-[13px] px-3.5 py-2.5 text-[13px] leading-relaxed">
                         ${escapeHtml(content)}
                     </div>
@@ -117,7 +117,7 @@ export function initAiChatWidget() {
             <span class="w-[26px] h-[26px] rounded-full bg-secondary-600 text-white inline-flex items-center justify-center flex-shrink-0">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-3 h-3" aria-hidden="true"><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z"/></svg>
             </span>
-            <div>
+            <div data-ai-chat-message-body>
                 <div class="bg-white border border-subtle rounded-[13px] px-3.5 py-2.5 text-[13px]">
                     <span class="inline-flex gap-1 py-1.5">
                         <span class="w-1.5 h-1.5 rounded-full bg-secondary-400 animate-bounce" style="animation-delay:0ms"></span>
@@ -140,13 +140,13 @@ export function initAiChatWidget() {
         // assistant: Markdown を sanitize して innerHTML、エラー文言は escapeHtml で literal 表示
         const inner = isError
             ? escapeHtml(content)
-            : `<div class="prose prose-sm max-w-none">${renderMarkdown(content)}</div>`;
+            : `<div class="prose prose-sm max-w-full">${renderMarkdown(content)}</div>`;
         messagesEl.insertAdjacentHTML('beforeend', `
             <div class="flex gap-2 max-w-[86%]">
                 <span class="w-[26px] h-[26px] rounded-full bg-secondary-600 text-white inline-flex items-center justify-center flex-shrink-0">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-3 h-3" aria-hidden="true"><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z"/></svg>
                 </span>
-                <div><div class="rounded-[13px] px-3.5 py-2.5 text-[13px] leading-relaxed ${bubbleCls}">${inner}</div></div>
+                <div data-ai-chat-message-body><div class="rounded-[13px] px-3.5 py-2.5 text-[13px] leading-relaxed ${bubbleCls}">${inner}</div></div>
             </div>
         `);
         if (isError && retryContent) {
