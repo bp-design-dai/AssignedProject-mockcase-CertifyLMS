@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\AiChatController;
+use App\Http\Controllers\AiChatMessageController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\Auth\OnboardingController;
 use App\Http\Controllers\BrowseController;
@@ -53,6 +55,7 @@ use App\Http\Controllers\Settings\SettingsDefaultEnrollmentController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WeakDrillController;
 use App\Http\Controllers\WeakDrillResultController;
+use App\Http\Middleware\EnsureAiChatAvailable;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -562,3 +565,14 @@ if (app()->environment('local')) {
         return view('_dev.components');
     })->name('_dev.components');
 }
+
+// S-A-02: use string IDs so the feature switch is checked before any AI table binding.
+Route::middleware(['auth', 'role:student', 'active-learning', EnsureAiChatAvailable::class])
+    ->prefix('ai-chat')->name('ai-chat.')->group(function () {
+        Route::get('/', [AiChatController::class, 'index'])->name('index');
+        Route::post('conversations', [AiChatController::class, 'store'])->name('conversations.store');
+        Route::get('conversations/{conversation}', [AiChatController::class, 'show'])->name('conversations.show');
+        Route::patch('conversations/{conversation}', [AiChatController::class, 'update'])->name('conversations.update');
+        Route::delete('conversations/{conversation}', [AiChatController::class, 'destroy'])->name('conversations.destroy');
+        Route::post('conversations/{conversation}/messages', [AiChatMessageController::class, 'store'])->name('conversations.messages.store');
+    });

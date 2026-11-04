@@ -1,3 +1,4 @@
+import { rememberConversation } from './widget-state.js';
 import { AiChatClient } from './chat-client.js';
 import { renderFullScreenMessage } from './message-renderer.js';
 
@@ -18,8 +19,42 @@ function initForm() {
     const list = document.querySelector('[data-message-list]');
     const scroller = document.querySelector('[data-message-scroller]');
     const titleEl = document.querySelector('[data-conversation-title]');
+    const renameForm = document.getElementById('rename-ai-chat-form');
+    const renameTitle = renameForm?.querySelector('[name="title"]');
+    const renameAuto = renameForm?.querySelector('[type="checkbox"][name="auto_title"]');
+    const emptyState = document.querySelector('[data-ai-chat-empty-state]');
+    let persistedTitle = titleEl?.textContent.trim() ?? '';
+    let autoEdited = false;
+    renameAuto?.addEventListener('change', () => { autoEdited = true; });
+    renameForm?.addEventListener('submit', () => {
+        // An untouched title must not overwrite a newer value saved while the AI request was in flight.
+        if (renameTitle?.value === persistedTitle) renameTitle.disabled = true;
+    });
+
+    function updateConversation(conversation) {
+        if (!conversation?.title) return;
+        // Keep unsaved manual edits and explicit switch changes when a response arrives.
+        if (renameTitle?.value === persistedTitle) renameTitle.value = conversation.title;
+        if (renameAuto && !autoEdited && typeof conversation.auto_title === 'boolean') {
+            renameAuto.checked = conversation.auto_title;
+        }
+        persistedTitle = conversation.title;
+        if (titleEl) titleEl.textContent = persistedTitle;
+        const parts = document.title.split(' | ');
+        document.title = parts.length > 1 ? `${persistedTitle} | ${parts[parts.length - 1]}` : persistedTitle;
+    }
 
     if (!list) return;
+    let tabStorage = null;
+    try { tabStorage = sessionStorage; } catch (_) {}
+    rememberConversation(tabStorage, form.dataset.userId, form.dataset.conversationId, { section_id: form.dataset.sectionId, certification_id: form.dataset.certificationId });
+    let lastSentContent = '';
+    document.addEventListener('click', event => {
+        const retry = event.target.closest('[data-ai-chat-retry]');
+        if (!retry || submit.disabled) return;
+        textarea.value = retry.dataset.retryContent;
+        form.requestSubmit();
+    });
 
     const viewerName = document.querySelector('meta[name="auth-user-name"]')?.content
         ?? document.querySelector('.tb-user .nm')?.textContent?.trim()
@@ -89,21 +124,25 @@ function initForm() {
             clearTyping();
             renderFullScreenMessage(list, msg, { viewerName });
         },
-        onTitleUpdated: ({ title }) => {
-            if (! title) return;
-            if (titleEl) titleEl.textContent = title;
-            const parts = document.title.split(' | ');
-            document.title = parts.length > 1 ? `${title} | ${parts[parts.length - 1]}` : title;
-        },
+        onConversation: updateConversation,
         onError: (err) => {
             clearTyping();
-            renderFullScreenMessage(list, {
+            const errorNode = renderFullScreenMessage(list, err.payload?.assistant_message ?? {
                 id: 'tmp-error-' + Date.now(),
                 role: 'assistant',
                 content: describeError(err),
                 status: 'error',
                 created_at: new Date().toISOString(),
             }, { viewerName });
+            if (errorNode && lastSentContent) {
+                const retry = document.createElement('button');
+                retry.type = 'button';
+                retry.className = 'mt-1 text-xs text-secondary-700 underline';
+                retry.dataset.aiChatRetry = '';
+                retry.dataset.retryContent = lastSentContent;
+                retry.textContent = '同じ質問を再送';
+                errorNode.querySelector('[data-body]').appendChild(retry);
+            }
             scrollToBottom();
         },
     });
@@ -111,7 +150,8 @@ function initForm() {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const content = textarea.value.trim();
-        if (!content) return;
+        if (!content || submit.disabled) return;
+        lastSentContent = content;
 
         submit.disabled = true;
         textarea.value = '';
@@ -119,13 +159,14 @@ function initForm() {
         autoResize();
 
         // 送信直後に自分の発言を楽観表示 + AI「考え中」インジケータを出す(応答待ちの無反応を防ぐ)
-        renderFullScreenMessage(list, {
+        const questionNode = renderFullScreenMessage(list, {
             id: 'tmp-user-' + Date.now(),
             role: 'user',
             content,
             status: 'completed',
             created_at: new Date().toISOString(),
         }, { viewerName });
+        if (questionNode) emptyState?.remove();
         currentTyping = appendTyping();
         scrollToBottom();
 
@@ -142,6 +183,7 @@ function initForm() {
 }
 
 function describeError(err) {
+    if (err.payload?.message) return err.payload.message;
     if (err.type === 'rate-limit') return '本日の利用上限に達しました。明日 0:00 以降に再度ご利用ください。';
     if (err.type === 'validation') return '入力内容を確認してください (1-2000 文字)。';
     if (err.type === 'llm') {

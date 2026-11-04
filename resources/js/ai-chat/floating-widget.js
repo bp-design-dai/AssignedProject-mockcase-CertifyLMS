@@ -1,3 +1,4 @@
+import { widgetKeys, rememberConversation, restoreConversation } from './widget-state.js';
 import { AiChatClient } from './chat-client.js';
 import { escapeHtml } from './message-renderer.js';
 import { renderMarkdown } from './markdown.js';
@@ -5,19 +6,13 @@ import { renderMarkdown } from './markdown.js';
 /**
  * フローティング AI 相談ウィジェット (受講生 + 受講中限定で全画面右下に常駐)。
  *
- * - FAB クリックでパネルを開閉、sessionStorage で状態保持
+ * - FAB クリックでパネルを開閉、tabStorage で状態保持
  * - data-section-id があれば「教材コンテキスト」付きで会話を作成 / 再開
  * - 教材以外では「全般相談」モード
  * - 「フル画面で開く」ボタンで /ai-chat/conversations/{id} に遷移
  * - Esc キーでパネルを閉じる、aria-modal トグル (NFR-ai-chat-007)
  * - 入力 → 送信で POST /ai-chat/conversations/{id}/messages、応答を逐次バブル表示
  */
-
-const STORAGE_OPEN = 'certify.aichat.widget.open';
-const STORAGE_CONV = 'certify.aichat.current_conversation_id';
-// 教材を切り替えた時に古い会話を引きずらないため、保存時の section_id を併せて保持し、
-// 現在の section と一致しない場合は currentConversationId をリセットする
-const STORAGE_CONV_SECTION = 'certify.aichat.current_conversation_section_id';
 
 function csrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.content ?? '';
@@ -38,6 +33,14 @@ export function initAiChatWidget() {
     if (!fab || !panel || !messagesEl) return;
 
     const sectionId = widget.dataset.sectionId || null;
+    const certificationId = widget.dataset.certificationId || null;
+    const userId = widget.dataset.userId;
+    const keys = widgetKeys(userId);
+    let tabStorage = null;
+    try { tabStorage = window.sessionStorage; } catch (_) {}
+    const STORAGE_OPEN = keys.open;
+    const STORAGE_CONV = keys.conversation;
+    const STORAGE_CONV_SECTION = keys.section;
     const storeUrl = widget.dataset.storeUrl;
     const fullscreenBase = widget.dataset.fullscreenBaseUrl;
 
@@ -47,20 +50,17 @@ export function initAiChatWidget() {
     const welcomeTemplate = initialWelcome ? initialWelcome.cloneNode(true) : null;
 
     let lastFocus = null;
-    let currentConversationId = null;
-    try {
-        const savedConvId = sessionStorage.getItem(STORAGE_CONV);
-        const savedSectionId = sessionStorage.getItem(STORAGE_CONV_SECTION);
-        // 同じ section コンテキスト (両方とも全般 = null、または同じ section_id) なら継続使用
-        // 異なる section に移動していたら、古い会話を引きずらないようリセット
-        if (savedConvId && savedSectionId === (sectionId ?? '')) {
-            currentConversationId = savedConvId;
-        } else {
-            sessionStorage.removeItem(STORAGE_CONV);
-            sessionStorage.removeItem(STORAGE_CONV_SECTION);
-        }
-    } catch (e) {
-        currentConversationId = null;
+    let currentConversationId = restoreConversation(tabStorage, userId, {
+        section_id: sectionId, certification_id: certificationId, explicit: widget.dataset.contextExplicit === '1',
+    });
+    let historyReady = Promise.resolve();
+
+    function applyConversation(conversation) {
+        const context = conversation?.context;
+        if (!context) return;
+        rememberConversation(tabStorage, userId, conversation.id, context);
+        const badge = widget.querySelector('[data-ai-chat-context]');
+        if (badge) badge.textContent = context.section_title ? `📚 ${context.section_title}` : (context.certification_name ? `🎓 ${context.certification_name}` : '全般相談');
     }
 
     function setOpen(open) {
@@ -72,7 +72,7 @@ export function initAiChatWidget() {
             panel.setAttribute('aria-hidden', 'false');
             panel.removeAttribute('inert');
             fab.style.display = 'none';
-            try { sessionStorage.setItem(STORAGE_OPEN, '1'); } catch (e) {}
+            try { tabStorage.setItem(STORAGE_OPEN, '1'); } catch (e) {}
             input?.focus();
         } else {
             panel.classList.add('hidden');
@@ -81,7 +81,7 @@ export function initAiChatWidget() {
             panel.setAttribute('aria-hidden', 'true');
             panel.setAttribute('inert', '');
             fab.style.display = '';
-            try { sessionStorage.setItem(STORAGE_OPEN, '0'); } catch (e) {}
+            try { tabStorage.setItem(STORAGE_OPEN, '0'); } catch (e) {}
             if (lastFocus && typeof lastFocus.focus === 'function') {
                 lastFocus.focus();
             }
@@ -132,7 +132,7 @@ export function initAiChatWidget() {
         return node;
     }
 
-    function appendAssistantBubble(content, { isError = false } = {}) {
+    function appendAssistantBubble(content, { isError = false, retryContent = null } = {}) {
         removeWelcome();
         const bubbleCls = isError
             ? 'bg-danger-50 border border-danger-200 text-danger-900'
@@ -149,10 +149,20 @@ export function initAiChatWidget() {
                 <div><div class="rounded-[13px] px-3.5 py-2.5 text-[13px] leading-relaxed ${bubbleCls}">${inner}</div></div>
             </div>
         `);
+        if (isError && retryContent) {
+            const retry = document.createElement('button');
+            retry.type = 'button';
+            retry.className = 'text-xs text-secondary-700 underline self-start';
+            retry.textContent = '同じ質問を再送';
+            retry.addEventListener('click', () => send(retryContent));
+            messagesEl.appendChild(retry);
+        }
         messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
     function describeError(err) {
+        if (err?.payload?.message) return err.payload.message;
+        if (err?.payload?.assistant_message?.content) return err.payload.assistant_message.content;
         if (err?.type === 'rate-limit') return '本日の利用上限に達しました。明日 0:00 以降に再度ご利用ください。';
         if (err?.type === 'llm') {
             const upstream = err.upstreamStatus;
@@ -169,7 +179,7 @@ export function initAiChatWidget() {
     }
 
     /**
-     * sessionStorage に conversation_id が残っている時、その会話の過去メッセージを fetch して
+     * tabStorage に conversation_id が残っている時、その会話の過去メッセージを fetch して
      * Widget の messages エリアに復元する。サイドバー (フル画面) と Widget の表示を一貫させるため。
      */
     async function loadConversationHistory(convId) {
@@ -182,14 +192,15 @@ export function initAiChatWidget() {
                 credentials: 'same-origin',
             });
             if (!res.ok) {
-                // 削除済 / 他者会話 など、復元できない場合は sessionStorage をクリアして新規扱いに
-                sessionStorage.removeItem(STORAGE_CONV);
-                sessionStorage.removeItem(STORAGE_CONV_SECTION);
+                // 削除済 / 他者会話 など、復元できない場合は tabStorage をクリアして新規扱いに
+                tabStorage.removeItem(STORAGE_CONV);
+                tabStorage.removeItem(STORAGE_CONV_SECTION);
                 currentConversationId = null;
 
                 return;
             }
             const data = await res.json();
+            applyConversation(data.conversation);
             const messages = Array.isArray(data?.messages) ? data.messages : [];
             if (messages.length === 0) return;
 
@@ -198,7 +209,7 @@ export function initAiChatWidget() {
                 if (m.role === 'user') {
                     appendUserBubble(m.content ?? '');
                 } else if (m.role === 'assistant') {
-                    appendAssistantBubble(m.content ?? '', { isError: m.status === 'error' });
+                    appendAssistantBubble(m.content ?? '', { isError: m.status === 'error', retryContent: m.retry_content });
                 }
             });
         } catch (e) {
@@ -208,13 +219,13 @@ export function initAiChatWidget() {
 
     /**
      * Widget 内で「新しい相談」を始める。現在の conversation_id をクリア、メッセージ領域を初期状態 (welcome) に戻す。
-     * sessionStorage も削除して、次回送信時に新規会話を作る。
+     * tabStorage も削除して、次回送信時に新規会話を作る。
      */
     function startNewConversation() {
         currentConversationId = null;
         try {
-            sessionStorage.removeItem(STORAGE_CONV);
-            sessionStorage.removeItem(STORAGE_CONV_SECTION);
+            tabStorage.removeItem(STORAGE_CONV);
+            tabStorage.removeItem(STORAGE_CONV_SECTION);
         } catch (e) {}
         // 過去メッセージを全削除して welcome を再生成
         messagesEl.innerHTML = '';
@@ -255,6 +266,7 @@ export function initAiChatWidget() {
             source: 'widget',
         };
         if (sectionId) body.section_id = sectionId;
+        else if (certificationId) body.certification_id = certificationId;
 
         // Accept: application/json により Controller は redirect ではなく JSON を返す
         // (200 = 既存会話再開 / 201 = 新規作成)
@@ -276,43 +288,49 @@ export function initAiChatWidget() {
         const data = await res.json().catch(() => null);
         if (data?.conversation?.id) {
             currentConversationId = data.conversation.id;
+            applyConversation(data.conversation);
             try {
-                sessionStorage.setItem(STORAGE_CONV, currentConversationId);
+                tabStorage.setItem(STORAGE_CONV, currentConversationId);
                 // section コンテキストの「鍵」を保存 → 次回 init 時に sectionId 一致を確認
-                sessionStorage.setItem(STORAGE_CONV_SECTION, sectionId ?? '');
+                tabStorage.setItem(STORAGE_CONV_SECTION, data.conversation.context?.section_id ?? '');
             } catch (e) {}
 
+            if (res.status === 200) await loadConversationHistory(currentConversationId);
             return currentConversationId;
         }
         throw new Error('conversation id resolution failed');
     }
 
     async function send(content) {
+        if (sendBtn.disabled || widget.dataset.available === '0') return;
         sendBtn.disabled = true;
+        await historyReady;
         input.disabled = true;
         // 送信直後に入力欄をクリア(楽観的 UI、AI 応答を待たずに空へ戻す)
         input.value = '';
         input.style.height = '';
-        appendUserBubble(content);
-        const typingNode = appendTypingBubble();
+        let typingNode = null;
 
         try {
             const convId = await ensureConversation();
+            appendUserBubble(content);
+            typingNode = appendTypingBubble();
             const client = new AiChatClient({
                 storeUrl: `/ai-chat/conversations/${convId}/messages`,
+                onConversation: applyConversation,
                 onAssistantMessage: (msg) => {
-                    typingNode.remove();
+                    typingNode?.remove();
                     appendAssistantBubble(msg.content ?? '', { isError: msg.status === 'error' });
                 },
                 onError: (err) => {
-                    typingNode.remove();
-                    appendAssistantBubble(describeError(err), { isError: true });
+                    typingNode?.remove();
+                    appendAssistantBubble(describeError(err), { isError: true, retryContent: content });
                 },
             });
             await client.sendSync(content);
         } catch (err) {
-            typingNode.remove();
-            appendAssistantBubble('送信に失敗しました。', { isError: true });
+            typingNode?.remove();
+            appendAssistantBubble('送信に失敗しました。', { isError: true, retryContent: content });
         } finally {
             sendBtn.disabled = false;
             input.disabled = false;
@@ -335,9 +353,9 @@ export function initAiChatWidget() {
     const newBtn = widget.querySelector('[data-ai-chat-new]');
     newBtn?.addEventListener('click', () => startNewConversation());
 
-    // sessionStorage に conversation_id があれば、開時に過去メッセージを復元 (Widget とサイドバーの表示一貫)
+    // tabStorage に conversation_id があれば、開時に過去メッセージを復元 (Widget とサイドバーの表示一貫)
     if (currentConversationId) {
-        loadConversationHistory(currentConversationId);
+        historyReady = loadConversationHistory(currentConversationId);
     }
 
     document.addEventListener('keydown', (e) => {
@@ -368,6 +386,6 @@ export function initAiChatWidget() {
 
     // Restore open state
     try {
-        if (sessionStorage.getItem(STORAGE_OPEN) === '1') setOpen(true);
+        if (tabStorage.getItem(STORAGE_OPEN) === '1') setOpen(true);
     } catch (e) {}
 }

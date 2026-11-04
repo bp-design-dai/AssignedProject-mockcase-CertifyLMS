@@ -301,3 +301,58 @@ GoogleのTesting公開状態やOAuthポリシーによるトークン有効期�
 実APIへの連携・終日/繰り返し/予定なし・作成/削除の最終疎通は、本人がOAuth設定を用意した後に検証アカウントで実施します。
 
 公式資料: [OAuth Web Server](https://developers.google.com/identity/protocols/oauth2/web-server)、[FreeBusy](https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query)、[予定作成](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert)、[予定削除](https://developers.google.com/workspace/calendar/api/v3/reference/events/delete)。
+
+
+## Gemini AI相談（S-A-02）
+
+受講中（`UserStatus::InProgress`）の受講生本人だけが、右下のウィジェットと`/ai-chat`で相談できます。コーチ・管理者・招待中・卒業・退会は利用できず、会話の閲覧・送信・タイトル変更・削除も所有者に限ります。会話は自動削除しません。
+
+```dotenv
+AI_CHAT_ENABLED=false
+AI_CHAT_DAILY_LIMIT=30
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_TIMEOUT=30
+# AI_CHAT_SYSTEM_PROMPT="任意の学習支援指示"
+```
+
+新規の検証環境で追加マイグレーションを適用し、アセットをビルドしてください。既存データの初期化は不要です。デモ履歴が必要な場合だけ`AiChatSeeder`を実行します。通常の新規DB用`DatabaseSeeder`にも含まれ、教材付き・全般・応答失敗の会話を用意します。SeederからGeminiへ通信せず、再実行で既存の会話・メッセージは上書きしません。
+
+```bash
+sail artisan migrate
+sail artisan db:seed --class=AiChatSeeder
+sail npm run build
+```
+
+実データ用DBへ適用しない検証では、`APP_ENV=testing`・`DB_DATABASE=testing`を明示した独立テストDBを使用してください。未適用の実データ用DBでは`AI_CHAT_ENABLED=false`を維持します。OFF時はUIを隠し、AI用テーブルをルートモデルバインディングで参照する前に画面・APIを404にします。ONでもAPIキー未設定なら、利用できない旨を表示し、APIは503で拒否します。設定キャッシュの運用時は変更後に専用環境のキャッシュを再生成してください。
+
+APIキーは本人がGoogle AI Studioで検証用プロジェクトのキーを作成し、対象環境の`.env`へ直接入力します。Googleログイン・利用規約への同意・課金設定の操作は本人が行います。値をチャット・Git・PR・スクリーンショットへ貼らず、フロント用の`VITE_`変数にも入れないでください。`GEMINI_MODEL`はそのアカウントで利用可能なモデルIDを指定します。提供済みUIの旧モデル名を固定表示せず、設定例はGoogleの後継推奨に合わせています。実接続前に利用可能モデル・キーの権限・料金とクォータを本人が確認してください。
+
+送信は`generateContent`への同期REST呼出しで、APIキーは`x-goog-api-key`ヘッダにだけ渡します。接続タイムアウト5秒、応答タイムアウトは既定30秒です。自動再送はせず、応答失敗・空応答・遮断をエラーとして保存します。リクエスト本文・APIキー・プロバイダーのエラー本文をログへ出しません。
+
+利用回数は学習者の送信を受理した時点で、日本時間の日付ごとの`ai_chat_daily_usages`に保存します。既定は1人30回、JST翌日0時から別日分を使います。ユーザー行→会話行のロック順序で上限確認と質問保存を確定してから、DBロックを解放して外部通信します。AI失敗もカウントし、ユーザーによる再送は新しい質問として保存・加算します。タイトル生成の補助呼出しは学習者の送信回数に加算しません（更新対象の送信では回答とタイトルで最大2回のGemini呼出しがあります）。認可・入力・上限・同一会話の応答待ちで拒否した操作はAI送信を受理しません。回答待ちの競合は409、日次上限は429です。
+
+質問と応答待ちメッセージはAPI通信前に保存されるため、失敗しても質問が残ります。失敗した質問には「同じ質問を再送」を表示します。中断された古い応答待ちは次の送信時にエラーへ変更し、既に使った回数は返却しません。削除後の外部応答で会話を復活させることはありません。
+
+タイトルは最初のAI回答成功時に生成し、その後は前回のタイトル生成から質問が5件増えた成功応答で更新します。失敗した質問も質問数に含め、タイトル生成だけ失敗した場合は回答を維持して次の成功時に再試行します。50文字以内に制限し、手動編集で自動更新をOFFにします。タイトル編集ダイアログのチェックでONに戻せます。
+
+現在のSection、資格画面の資格、それ以外では本人の最後の学習セッションの資格の順でコンテキストを選びます。既定資格を「最後に学習した資格」として代用しません。取得できなければ資格情報を付けず、直接紐付ける教材はSectionだけです。同じ本人・Sectionは会話を再利用し、DB一意制約とユーザー行ロックで同時作成もまとめます。教材本文の送信時にも、公開状態・本人の有効な受講登録・既存のSection閲覧Gateを確認します。過去の履歴は表示し、Geminiに送る履歴は現在の質問を含め直近10往復・最大20メッセージ（先頭の孤立したAI回答は除外）です。失敗した応答は送らず、連続する受講生の質問は同じuserターンのpartsへまとめてGeminiの交互ロール形式を維持します。
+
+ウィジェットの開閉・会話は受講生ID別の`sessionStorage`で保持します。教材から一般画面へ移動しても保持し、明示的に別Section・別資格を開いた場合はその文脈へ切り替えます。フル画面で再開した会話も次の一般画面へ引き継ぎます。
+
+モデル名・トークン数・応答時間はメッセージとタイトルの内部メタデータだけに保存します。Blade・動的メッセージ・ウィジェットに表示せず、公開JSONも許可項目だけを返します。通常の送信時刻・「AI相談」の固定ラベル・再送用エラー表示は維持しています。
+
+外部通信なしの専用テストとJavaScript状態テスト:
+
+```bash
+APP_ENV=testing DB_DATABASE=testing sail artisan test tests/Feature/Http/AiChat tests/Unit/Integrations/GeminiGatewayTest.php
+sail exec laravel.test node --test tests/Js/ai-chat-state.test.mjs
+```
+
+並行テストはMySQLの独立プロセス・独立接続を使い、`testing` DB以外ではマイグレーションを拒否します。`SA02_CONCURRENCY_REPORT`で接続ID・ロック待機・結果のJSONLを保存できます。実接続では、安全な独立Web・DBで本人がキーを入力した後、ウィジェットとフル画面の送信・履歴・再送・タイトル・上限案内を確認してください。実APIの利用可否・速度・課金はモックテストの成功だけでは確認できません。
+
+公式資料: [generateContent](https://aistudio.google.com/api-reference/generate-content)、[APIキー](https://aistudio.google.com/docs/api-key)、[モデルの廃止予定](https://aistudio.google.com/docs/deprecations)。
+
+資格紹介ページでは公開されている資格名を相談の文脈として保持します。未登録でも既存の資格紹介ページを閲覧できますが、教材本文は本人の有効な受講登録と既存Gateで許可されたSectionだけを付与します。公開停止後は資格情報も新たなプロンプトに付与しません。
+
+AI相談の画面回帰テストは `sail npm run test:ai-chat` で実行します。既存の状態保持テストに加え、テスト専用のjsdomで実際のフォーム・メッセージDOMと本番のJSを動かし、タイトルの同期・未変更保存・ON/OFF・空状態の解除を確認します。`npm ci`では開発依存もインストールしてください（検証したSail内Nodeは24.14.1）。タイトル未変更時はtitleを再送せず、自動更新設定だけを送ります。入力中のタイトルや明示的なスイッチ操作は、AI回答が到着しても上書きしません。

@@ -33,34 +33,23 @@ export class AiChatClient {
             return;
         }
 
-        const response = await fetch(this.storeUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken(),
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            credentials: 'same-origin',
-            body: JSON.stringify({ content }),
-        });
-
-        if (response.status === 429) {
-            this.onError({ type: 'rate-limit', status: 429 });
-            return;
-        }
-        if (response.status === 422) {
-            const payload = await response.json().catch(() => ({}));
-            this.onError({ type: 'validation', status: 422, payload });
-            return;
-        }
-        if (response.status === 502) {
-            const payload = await response.json().catch(() => ({}));
-            this.onError({ type: 'llm', status: 502, upstreamStatus: payload?.upstream_status ?? null, payload });
+        let response;
+        try {
+            response = await fetch(this.storeUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin', body: JSON.stringify({ content }),
+            });
+        } catch (_) {
+            this.onError({ type: 'network' });
             return;
         }
         if (!response.ok) {
-            this.onError({ type: 'http', status: response.status });
+            const payload = await response.json().catch(() => ({}));
+            if (payload.user_message) this.onUserMessage(payload.user_message);
+            if (payload.conversation) this.onConversation(payload.conversation);
+            const type = response.status === 429 ? 'rate-limit' : (response.status === 422 ? 'validation' : (response.status === 502 ? 'llm' : 'http'));
+            this.onError({ type, status: response.status, upstreamStatus: payload.upstream_status ?? null, payload });
             return;
         }
 

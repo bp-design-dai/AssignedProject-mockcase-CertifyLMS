@@ -8,10 +8,12 @@
     'sectionId' => null,
     'sectionTitle' => null,
     'certificationName' => null,
+    'certificationId' => null,
+    'explicitContext' => false,
 ])
 
 @php
-    $model = (string) config('ai-chat.gemini.model', 'gemini-2.5-flash');
+    $available = filled(config('ai-chat.gemini.api_key'));
 
     if ($sectionId && $sectionTitle) {
         $ctxLabel = '📚 '.$sectionTitle;
@@ -29,6 +31,10 @@
 @endphp
 
 <div data-ai-chat-widget
+    data-user-id="{{ auth()->id() }}"
+    data-available="{{ $available ? '1' : '0' }}"
+    data-certification-id="{{ $certificationId }}"
+    data-context-explicit="{{ $explicitContext ? '1' : '0' }}"
     data-section-id="{{ $sectionId }}"
     data-section-title="{{ $sectionTitle }}"
     data-certification-name="{{ $certificationName }}"
@@ -102,9 +108,11 @@
             <span data-ai-chat-context class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white border {{ $ctxClass }} font-semibold">
                 {{ $ctxLabel }}
             </span>
-            <span class="ml-auto text-[10px] text-ink-500 font-mono">{{ $model }}</span>
         </div>
 
+        @if (!$available)
+            <div class="px-4 py-3 text-sm text-ink-600" role="status">AI相談は現在利用できません。接続設定が準備されるまでお待ちください。</div>
+        @endif
         {{-- Messages --}}
         <div role="log"
             aria-live="polite"
@@ -166,6 +174,7 @@
         <div class="bg-white border-t border-subtle px-3 py-2.5">
             <div class="flex gap-1.5 items-end bg-surface-canvas border border-subtle rounded-[14px] p-1 focus-within:border-secondary-400 focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.12)] transition">
                 <textarea
+                    @disabled(!$available)
                     data-ai-chat-widget-input
                     rows="1"
                     maxlength="2000"
@@ -173,6 +182,7 @@
                     class="flex-1 bg-transparent border-0 outline-none resize-none text-[13px] leading-relaxed text-ink-900 placeholder:text-ink-400 py-2 px-2.5 max-h-[96px] min-h-[36px] rounded-[11px]"
                     aria-label="AI への質問入力"></textarea>
                 <button type="button"
+                    @disabled(!$available)
                     data-ai-chat-widget-send
                     aria-label="送信"
                     class="w-8 h-8 rounded-[10px] bg-secondary-600 hover:bg-secondary-700 text-white inline-flex items-center justify-center self-center disabled:opacity-50 disabled:cursor-not-allowed">
