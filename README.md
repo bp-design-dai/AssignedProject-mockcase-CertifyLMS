@@ -361,7 +361,7 @@ AI回答の日本語括弧に隣接する太字は、通常のCommonMark判定�
 
 ### 追加面談購入（S-A-03、Stripeテストモード）
 
-学習中の受講生は `/meeting-quota/checkout` から公開中かつ有料の面談パックを購入できます。購入開始時に購入者とパックを行ロック下で再確認し、名称・円建て金額・面談回数を `payments` に保存します。Checkout Sessionは保存値から動的に作成します。パックの `stripe_price_id` やブラウザから渡された価格は使用しません。カード入力はStripe側だけで行います。
+学習中の受講生は `/meeting-quota/checkout` から公開中かつ50円以上の面談パックを購入できます。購入開始時に購入者とパックを行ロック下で再確認し、名称・円建て金額・面談回数を `payments` に保存します。Checkout Sessionは保存値から動的に作成します。パックの `stripe_price_id` やブラウザから渡された価格は使用しません。カード入力はStripe側だけで行います。
 
 `POST /webhooks/stripe` は生のリクエスト本文と署名をStripe SDKで検証し、Checkout Sessionの現在状態を照会します。`complete` / `paid` で、Session ID・購入ID・金額・通貨が一致した場合だけ既存台帳に `purchased` を追記します。受講状態の変更は確定済み購入の付与を妨げません。処理済みイベント、購入の付与済み時刻、台帳の購入ID一意制約を同一トランザクションで確定します。Webhookが非2xxで失敗した場合はStripe再送の対象です。
 

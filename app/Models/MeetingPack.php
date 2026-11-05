@@ -90,6 +90,17 @@ class MeetingPack extends Model
      *
      * @return Builder<MeetingPack>
      */
+    public function scopePurchasableWithStripe(Builder $query): Builder
+    {
+        // Stripe's minimum charge when settling in Japanese yen is 50 JPY.
+        return $query->published()->where('price', '>=', 50)->where('meeting_count', '>', 0);
+    }
+
+    /**
+     * @param Builder<MeetingPack> $query
+     *
+     * @return Builder<MeetingPack>
+     */
     public function scopeOrdered(Builder $query): Builder
     {
         return $query->orderBy('sort_order')->orderByDesc('created_at');

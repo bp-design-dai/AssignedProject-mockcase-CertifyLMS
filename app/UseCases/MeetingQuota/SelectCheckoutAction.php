@@ -20,7 +20,7 @@ final class SelectCheckoutAction
         Gate::forUser($user)->authorize('create', Payment::class);
 
         return [
-            'plans' => MeetingPack::published()->where('price', '>', 0)->where('meeting_count', '>', 0)->ordered()->get(),
+            'plans' => MeetingPack::purchasableWithStripe()->ordered()->get(),
             'available' => $this->gateway->isConfigured() && Schema::hasTable('payments'),
         ];
     }

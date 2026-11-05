@@ -27,8 +27,12 @@ final class CreateCheckoutAction
         $payment = DB::transaction(function () use ($user, $packId) {
             $buyer = User::withTrashed()->lockForUpdate()->findOrFail($user->id);
             Gate::forUser($buyer)->authorize('create', Payment::class);
-            $pack = MeetingPack::lockForUpdate()->findOrFail($packId);
-            Gate::forUser($buyer)->authorize('purchase', [Payment::class, $pack]);
+            $pack = MeetingPack::purchasableWithStripe()->lockForUpdate()->find($packId);
+            if ($pack === null) {
+                // Preserve 404 for a missing pack and 403 for an ineligible pack.
+                MeetingPack::lockForUpdate()->findOrFail($packId);
+                abort(403);
+            }
 
             return Payment::create([
                 'user_id' => $buyer->id, 'meeting_pack_id' => $pack->id,

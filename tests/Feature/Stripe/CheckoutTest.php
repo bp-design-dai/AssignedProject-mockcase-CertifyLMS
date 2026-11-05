@@ -26,7 +26,7 @@ class CheckoutTest extends TestCase
         $this->fakeStripe();
     }
 
-    public function test_only_positive_published_packs_are_shown_in_existing_order(): void
+    public function test_only_purchasable_packs_are_shown_in_existing_order(): void
     {
         $one = MeetingPack::factory()->published()->create(['sort_order' => 1]);
         $two = MeetingPack::factory()->published()->create(['sort_order' => 2]);
@@ -72,7 +72,7 @@ class CheckoutTest extends TestCase
     }
 
     #[DataProvider('forbiddenPacks')]
-    public function test_direct_post_cannot_purchase_unpublished_or_zero_price(string $status, int $price): void
+    public function test_direct_post_cannot_purchase_unpublished_packs(string $status, int $price): void
     {
         $pack = MeetingPack::factory()->create(['status' => $status, 'price' => $price]);
         $this->actingAs(User::factory()->create())->postJson('/meeting-quota/checkout', ['meeting_pack_id' => $pack->id])->assertForbidden();
@@ -82,7 +82,60 @@ class CheckoutTest extends TestCase
 
     public static function forbiddenPacks(): array
     {
-        return [['draft', 3000], ['archived', 3000], ['published', 0]];
+        return [['draft', 50], ['archived', 51]];
+    }
+
+    #[DataProvider('stripePrices')]
+    public function test_stripe_price_boundary_in_listing_and_direct_purchase(int $price, bool $purchasable): void
+    {
+        $pack = MeetingPack::factory()->published()->create(['price' => $price, 'meeting_count' => 3]);
+        $this->actingAs(User::factory()->create())->get('/meeting-quota/checkout')->assertOk()
+            ->assertViewHas('plans', fn ($plans) => $plans->modelKeys() === ($purchasable ? [$pack->id] : []));
+
+        $response = $this->postJson('/meeting-quota/checkout', ['meeting_pack_id' => $pack->id]);
+        if ($purchasable) {
+            $response->assertStatus(303)->assertRedirectContains('https://checkout.stripe.com/');
+            $payment = Payment::sole();
+            $this->assertSame([$price, 3, 'jpy', PaymentStatus::Pending], [$payment->amount, $payment->quantity, $payment->currency, $payment->status]);
+            $this->assertSame(1, $this->gateway->creates);
+        } else {
+            $response->assertForbidden();
+            $this->assertDatabaseCount('payments', 0);
+            $this->assertSame(0, $this->gateway->creates);
+        }
+        $this->assertDatabaseCount('meeting_quota_transactions', 0);
+    }
+
+    public static function stripePrices(): array
+    {
+        return [
+            '0 JPY' => [0, false],
+            '1 JPY' => [1, false],
+            '49 JPY' => [49, false],
+            '50 JPY' => [50, true],
+            '51 JPY' => [51, true],
+        ];
+    }
+
+    #[DataProvider('packChanges')]
+    public function test_direct_purchase_rechecks_pack_after_listing(array $changes): void
+    {
+        $pack = MeetingPack::factory()->published()->create(['price' => 50]);
+        $this->actingAs(User::factory()->create())->get('/meeting-quota/checkout')->assertOk()
+            ->assertViewHas('plans', fn ($plans) => $plans->modelKeys() === [$pack->id]);
+        $pack->update($changes);
+
+        $this->postJson('/meeting-quota/checkout', ['meeting_pack_id' => $pack->id])->assertForbidden();
+        $this->assertDatabaseCount('payments', 0);
+        $this->assertSame(0, $this->gateway->creates);
+    }
+
+    public static function packChanges(): array
+    {
+        return [
+            'price falls below minimum' => [['price' => 49]],
+            'pack becomes unpublished' => [['status' => 'archived']],
+        ];
     }
 
     public function test_missing_invalid_and_unknown_pack_id_are_rejected(): void

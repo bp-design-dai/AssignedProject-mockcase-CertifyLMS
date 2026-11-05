@@ -53,9 +53,10 @@ class StripeApiCheckoutGatewayTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_sdk_creates_jpy_single_purchase_from_snapshot_with_idempotency_key(): void
+    #[DataProvider('purchasePrices')]
+    public function test_sdk_creates_jpy_single_purchase_from_snapshot_with_idempotency_key(int $price): void
     {
-        $payment = new Payment(['pack_name' => '購入時の3回パック', 'amount' => 6000, 'quantity' => 3]);
+        $payment = new Payment(['pack_name' => '購入時の3回パック', 'amount' => $price, 'quantity' => 3]);
         $payment->id = '01examplepayment';
         $result = $this->gateway->create($payment);
         $request = $this->http->calls[0];
@@ -69,7 +70,7 @@ class StripeApiCheckoutGatewayTest extends TestCase
         $this->assertSame('false', $params['allow_promotion_codes']);
         $this->assertSame($payment->id, $params['metadata']['payment_id']);
         $this->assertSame($payment->id, $params['client_reference_id']);
-        $this->assertSame(['price_data' => ['currency' => 'jpy', 'unit_amount' => 6000, 'product_data' => ['name' => '購入時の3回パック']], 'quantity' => 1], $params['line_items'][0]);
+        $this->assertSame(['price_data' => ['currency' => 'jpy', 'unit_amount' => $price, 'product_data' => ['name' => '購入時の3回パック']], 'quantity' => 1], $params['line_items'][0]);
         $this->assertStringEndsWith('/meeting-quota/success?session_id={CHECKOUT_SESSION_ID}', $params['success_url']);
         $this->assertStringStartsWith(config('app.url'), $params['success_url']);
         $this->assertStringContainsString('/meeting-quota/checkout?canceled=1', $params['cancel_url']);
@@ -77,6 +78,11 @@ class StripeApiCheckoutGatewayTest extends TestCase
         $this->assertArrayNotHasKey('customer_email', $params);
         $this->assertArrayNotHasKey('setup_future_usage', $params);
         $this->assertSame(['id', 'url'], array_keys($result));
+    }
+
+    public static function purchasePrices(): array
+    {
+        return ['minimum' => [50], 'just above minimum' => [51], 'ordinary price' => [6000]];
     }
 
     public function test_sdk_retrieves_only_safe_matching_fields_and_excludes_customer_details(): void
