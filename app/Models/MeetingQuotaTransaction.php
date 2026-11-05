@@ -64,17 +64,10 @@ class MeetingQuotaTransaction extends Model
         return $this->belongsTo($meetingClass, 'related_meeting_id');
     }
 
-    /**
-     * 決済(Payment)モデルは追加面談購入 Feature 所有。本 Feature 単体で migrate:fresh する場合は
-     * Payment クラスが未定義となるが、`belongsTo` の class 解決は relation 実行時まで遅延されるため、
-     * 関連レコードを Eager Loading しない限り問題ない。
-     */
+    /** @return BelongsTo<Payment, $this> */
     public function relatedPayment(): BelongsTo
     {
-        /** @var class-string<Model> $paymentClass */
-        $paymentClass = 'App\\Models\\Payment';
-
-        return $this->belongsTo($paymentClass, 'related_payment_id');
+        return $this->belongsTo(Payment::class, 'related_payment_id');
     }
 
     /**

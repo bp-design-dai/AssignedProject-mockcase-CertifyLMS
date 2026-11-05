@@ -5,24 +5,28 @@
 --}}
 @extends('layouts.app')
 
-@section('title', 'お支払い完了')
+@section('title', 'お支払い状況')
 
 @section('content')
+    @php($paid = $payment?->status === \App\Enums\PaymentStatus::Succeeded)
     <div class="max-w-xl mx-auto mt-8">
         <x-card padding="lg" shadow="md" class="text-center">
-            <div class="mx-auto w-16 h-16 rounded-full bg-success-50 text-success-600 flex items-center justify-center">
-                <x-icon name="check-circle" variant="solid" class="w-10 h-10" />
+            <div class="mx-auto w-16 h-16 rounded-full {{ $paid ? 'bg-success-50 text-success-600' : 'bg-info-50 text-info-600' }} flex items-center justify-center">
+                <x-icon :name="$paid ? 'check-circle' : 'information-circle'" variant="solid" class="w-10 h-10" />
             </div>
-            <h1 class="text-xl font-bold text-ink-900 mt-4">お支払いが完了しました</h1>
+            <h1 class="text-xl font-bold text-ink-900 mt-4">{{ $paid ? 'お支払いが完了しました' : ($payment?->status?->label() ?? '決済の反映を確認中') }}</h1>
             <p class="text-sm text-ink-600 mt-2">
-                ご購入ありがとうございます。決済が確定次第、残面談回数へ自動的に加算されます。
-                反映までに数秒〜数十秒の遅延が生じることがあります。
+                @if ($paid)
+                    購入分の面談回数を加算しました。続けて面談を予約できます。
+                @else
+                    支払いが確定した購入だけ面談回数へ反映されます。反映待ちの場合は、時間をおいて再確認してください。
+                @endif
             </p>
 
             @if ($payment)
                 <dl class="mt-6 grid grid-cols-2 gap-3 text-left text-sm bg-ink-50 rounded-md p-4">
                     <dt class="text-ink-500">プラン</dt>
-                    <dd class="text-ink-900">{{ $payment->meetingPack?->name ?? '—' }}</dd>
+                    <dd class="text-ink-900">{{ $payment->pack_name }}</dd>
                     <dt class="text-ink-500">面談回数</dt>
                     <dd class="text-ink-900 tabular-nums">{{ $payment->quantity }} 回</dd>
                     <dt class="text-ink-500">金額</dt>
@@ -32,6 +36,7 @@
                 </dl>
             @endif
 
+            <div class="mt-4"><a href="{{ route('meeting-quota.checkout.success', ['session_id' => $payment?->stripe_session_id]) }}" class="text-sm text-primary-700 hover:underline">反映状況を再確認</a></div>
             <div class="mt-6 flex items-center justify-center gap-2">
                 <x-link-button href="{{ route('dashboard.index') }}" variant="primary">
                     <x-icon name="home" class="w-4 h-4" />

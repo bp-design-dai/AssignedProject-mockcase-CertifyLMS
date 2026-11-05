@@ -16,6 +16,11 @@ return [
     |
     */
 
+    'stripe' => [
+        'secret' => env('STRIPE_SECRET_KEY'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+    ],
+
     'google_calendar' => [
         'client_id' => env('GOOGLE_CALENDAR_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CALENDAR_CLIENT_SECRET'),

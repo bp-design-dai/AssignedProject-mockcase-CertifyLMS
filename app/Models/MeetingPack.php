@@ -62,10 +62,10 @@ class MeetingPack extends Model
         return $this->belongsTo(User::class, 'updated_by_user_id');
     }
 
-    /** Paymentは追加面談購入機能の所有。関連の利用は導入後に限る。 */
+    /** @return HasMany<Payment, $this> */
     public function payments(): HasMany
     {
-        return $this->hasMany('App\\Models\\Payment', 'meeting_pack_id');
+        return $this->hasMany(Payment::class);
     }
 
     public function hasPurchaseHistory(): bool

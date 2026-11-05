@@ -24,6 +24,13 @@
         <a href="{{ route('meeting-quota.history') }}" class="text-sm text-primary-700 hover:underline shrink-0 whitespace-nowrap">面談回数履歴 &rarr;</a>
     </div>
 
+    @if (request()->boolean('canceled'))
+        <x-alert type="info" class="mt-6">お支払いを中断しました。支払いが確定するまで面談回数は加算されません。</x-alert>
+    @endif
+    @if (! $available)
+        <x-alert type="warning" class="mt-6">現在、追加面談の決済を利用できません。時間をおいて再度お試しください。</x-alert>
+    @endif
+
     @if ($plans->isEmpty())
         <x-card class="mt-6" padding="none">
             <x-empty-state
@@ -52,7 +59,7 @@
                     <form novalidate method="POST" action="{{ route('meeting-quota.checkout.create') }}" class="mt-auto pt-6">
                         @csrf
                         <input type="hidden" name="meeting_pack_id" value="{{ $plan->id }}">
-                        <x-button type="submit" variant="primary" class="w-full justify-center">
+                        <x-button type="submit" variant="primary" class="w-full justify-center" :disabled="! $available">
                             <x-icon name="credit-card" class="w-4 h-4" />
                             このパックを購入
                         </x-button>

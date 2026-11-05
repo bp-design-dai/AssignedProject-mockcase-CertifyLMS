@@ -6,8 +6,10 @@ namespace App\Providers;
 
 use App\Contracts\GeminiGateway;
 use App\Contracts\GoogleCalendarGateway;
+use App\Contracts\StripeCheckoutGateway;
 use App\Integrations\Gemini\HttpGeminiGateway;
 use App\Integrations\GoogleCalendar\GoogleApiCalendarGateway;
+use App\Integrations\Stripe\StripeApiCheckoutGateway;
 use App\View\Composers\AiChatWidgetComposer;
 use App\View\Composers\EnrollmentSwitcherComposer;
 use App\View\Composers\NotificationBadgeComposer;
@@ -21,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->bind(StripeCheckoutGateway::class, StripeApiCheckoutGateway::class);
         $this->app->bind(GeminiGateway::class, HttpGeminiGateway::class);
         $this->app->bind(GoogleCalendarGateway::class, fn () => new GoogleApiCalendarGateway(new Client(['connect_timeout' => 2, 'timeout' => 5])));
     }
