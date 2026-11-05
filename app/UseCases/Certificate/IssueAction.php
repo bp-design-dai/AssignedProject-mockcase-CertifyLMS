@@ -9,48 +9,54 @@ use App\Exceptions\Certification\CertificateAlreadyIssuedException;
 use App\Exceptions\Certification\EnrollmentNotPassedException;
 use App\Models\Certificate;
 use App\Models\Enrollment;
+use App\Services\CertificatePdfService;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use RuntimeException;
+use Throwable;
 
-/**
- * 修了証を発行するユースケース。受講生自己発火型の修了処理 `\App\UseCases\Enrollment\ReceiveCertificateAction` から呼び出される。
- *
- * 業務分岐:
- * - Enrollment が `status=passed` + `passed_at != null` でない: EnrollmentNotPassedException（409）
- * - 同一 Enrollment に対する二重呼出: CertificateAlreadyIssuedException（409、事前 lockForUpdate + exists で検出）
- *
- * 修了証レコードの INSERT は `DB::transaction()` 内で実行する。
- */
 final class IssueAction
 {
-    /**
-     * @throws EnrollmentNotPassedException 受講登録が修了状態ではない
-     * @throws CertificateAlreadyIssuedException 同一 Enrollment で修了証が既発行
-     */
-    public function __invoke(Enrollment $enrollment): Certificate
+    public function __construct(private readonly CertificatePdfService $pdf) {}
+
+    public function __invoke(Enrollment $enrollment, ?CarbonInterface $issuedAt = null): Certificate
     {
-        if ($enrollment->status !== EnrollmentStatus::Passed || $enrollment->passed_at === null) {
-            throw new EnrollmentNotPassedException;
-        }
+        $path = null;
 
-        return DB::transaction(function () use ($enrollment) {
-            // 二重発行ガード: lockForUpdate で同時呼出を直列化し、enrollment_id UNIQUE 違反を例外メッセージ判別ではなく事前 SELECT で確定検出する
-            $existing = Certificate::query()
-                ->where('enrollment_id', $enrollment->id)
-                ->lockForUpdate()
-                ->first();
+        try {
+            return DB::transaction(function () use ($enrollment, $issuedAt, &$path) {
+                $locked = Enrollment::lockForUpdate()->findOrFail($enrollment->id);
+                if ($locked->status !== EnrollmentStatus::Passed || $locked->passed_at === null) {
+                    throw new EnrollmentNotPassedException;
+                }
 
-            if ($existing !== null) {
-                throw new CertificateAlreadyIssuedException;
+                if ($locked->certificate()->lockForUpdate()->first() !== null) {
+                    throw new CertificateAlreadyIssuedException;
+                }
+
+                $path = 'certificates/'.Str::ulid().'.pdf';
+                $certificate = new Certificate([
+                    'user_id' => $locked->user_id,
+                    'enrollment_id' => $locked->id,
+                    'certification_id' => $locked->certification_id,
+                    'pdf_path' => $path,
+                    'issued_at' => $issuedAt ?? now(),
+                ]);
+
+                $this->pdf->store($certificate);
+                if (! $certificate->save()) {
+                    throw new RuntimeException('Certificate record could not be saved.');
+                }
+
+                return $certificate;
+            });
+        } catch (Throwable $exception) {
+            if ($path !== null) {
+                $this->pdf->discard($path);
             }
 
-            return Certificate::create([
-                'user_id' => $enrollment->user_id,
-                'enrollment_id' => $enrollment->id,
-                'certification_id' => $enrollment->certification_id,
-                'pdf_path' => 'certificates/'.Str::ulid().'.pdf',
-                'issued_at' => now(),
-            ]);
-        });
+            throw $exception;
+        }
     }
 }

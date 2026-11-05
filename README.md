@@ -385,3 +385,9 @@ AI回答の日本語括弧に隣接する太字は、通常のCommonMark判定�
 自動テストは外部通信をモックします。Sailの隔離 `testing` DBで `APP_ENV=testing DB_DATABASE=testing sail artisan test tests/Feature/Stripe tests/Unit/Integrations/StripeApiCheckoutGatewayTest.php` を実行します。署名の検証には実SDKを使い、並行Webhookは別々のMySQL接続が同じ行ロックを待つことを確認します。
 
 公式仕様: [Checkoutの付与処理](https://docs.stripe.com/checkout/fulfillment?ui=full-page)、[Webhook署名](https://docs.stripe.com/webhooks/signature)。
+
+### 修了証PDF（S-A-04）
+
+修了証受領時に既存テンプレートをmPDFでA4横の日本語PDFへ変換し、非公開ディスクの `storage/app/private/certificates` に保存します。取得先は認証・認可付きの `/certificates/{certificate}/download` です。過去の発行記録にPDF実体がない場合は404になります。新規に投入するデモ修了証にはPDF実体が付きます。
+
+SailではPlaywright依存に含まれるIPAゴシック（`/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf`）を埋め込みます。別環境では日本語TrueTypeフォントを用意し、必要に応じて `CERTIFICATE_PDF_FONT_PATH` にその環境内の絶対パスを指定してください。PHP実行ユーザーには非公開保存領域と `storage/app/private/mpdf-certificates` への書き込み権限が必要です。

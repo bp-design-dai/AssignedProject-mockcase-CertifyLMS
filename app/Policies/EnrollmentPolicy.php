@@ -15,7 +15,7 @@ use App\Models\User;
  * - viewAny: admin / coach / student いずれかであれば一覧自体は閲覧可(取得スコープは Controller / Action 側で絞る)
  * - view: 受講生本人 / 当該資格の担当コーチ / admin
  * - create / delete: 受講生本人(自己登録 / 自己解除)。delete は status == Learning のみ
- * - receiveCertificate: 受講生本人 + status == Learning のみ
+ * - receiveCertificate: 受講生本人。学習中なら発行、発行済みなら既存の修了証を案内
  * - resume: 受講生本人 + status == Failed、または admin
  * - updateExamDate: admin または受講生本人(いずれも status != Passed)
  * - admin 専用操作: viewAdmin / fail
@@ -73,7 +73,8 @@ class EnrollmentPolicy
     {
         return $user->role === UserRole::Student
             && $enrollment->user_id === $user->id
-            && $enrollment->status === EnrollmentStatus::Learning;
+            && ($enrollment->status === EnrollmentStatus::Learning
+                || ($enrollment->status === EnrollmentStatus::Passed && $enrollment->certificate()->exists()));
     }
 
     public function delete(User $user, Enrollment $enrollment): bool
