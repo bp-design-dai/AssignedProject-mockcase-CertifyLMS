@@ -17,6 +17,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
+use setasign\Fpdi\PdfParser\PdfParser;
+use setasign\Fpdi\PdfParser\StreamReader;
+use setasign\Fpdi\PdfParser\Type\PdfDictionary;
+use setasign\Fpdi\PdfParser\Type\PdfType;
+use setasign\Fpdi\PdfReader\PdfReader;
 use Tests\TestCase;
 
 class CertificatePdfTest extends TestCase
@@ -46,6 +51,24 @@ class CertificatePdfTest extends TestCase
         $this->assertStringStartsWith('%PDF-', $bytes);
         $this->assertStringEndsWith('%%EOF', rtrim($bytes));
         $this->assertGreaterThan(1000, strlen($bytes));
+
+        $reader = new PdfReader(new PdfParser(StreamReader::createByString($bytes)));
+        $this->assertSame(1, $reader->getPageCount());
+        $page = $reader->getPage(1);
+        $resources = PdfType::resolve($page->getAttribute('Resources'), $reader->getParser());
+        $forms = PdfType::resolve(PdfDictionary::get($resources, 'XObject'), $reader->getParser());
+        $this->assertInstanceOf(PdfDictionary::class, $forms, 'The seal must render as a vector object.');
+        $this->assertCount(1, $forms->value);
+        $sealName = array_key_first($forms->value);
+        $seal = PdfType::resolve($forms->value[$sealName], $reader->getParser());
+        $this->assertSame('Form', PdfDictionary::get($seal->value, 'Subtype')->value);
+        [$left, $top, $right, $bottom] = array_map(
+            static fn ($point): float => (float) $point->value,
+            PdfDictionary::get($seal->value, 'BBox')->value,
+        );
+        $this->assertEqualsWithDelta(70.0, abs($right - $left), 0.1);
+        $this->assertEqualsWithDelta(70.0, abs($bottom - $top), 0.1);
+        $this->assertStringContainsString("/{$sealName} Do", $page->getContentStream());
 
         $download = $this->get(route('certificates.download', $certificate))->assertOk()
             ->assertHeader('Content-Type', 'application/pdf')->assertDownload('certificate.pdf');
