@@ -8,7 +8,7 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 /**
  * 同一 Enrollment に対して修了証が二重発行されようとした際の例外（HTTP 409）。
- * `enrollment_id` UNIQUE 制約違反を `Certificate\IssueAction` 内で catch して本例外に変換する。
+ * 発行前に受講登録行をロックし、既存の修了証を確認する。
  */
 final class CertificateAlreadyIssuedException extends ConflictHttpException
 {

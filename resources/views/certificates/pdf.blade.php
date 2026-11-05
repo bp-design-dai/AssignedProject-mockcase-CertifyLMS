@@ -105,19 +105,6 @@
             font-weight: bold;
             color: #0F2E2A;
         }
-        .seal {
-            display: inline-block;
-            width: 70pt;
-            height: 70pt;
-            border-radius: 35pt;
-            background-color: #0D9488;
-            color: #FFFFFF;
-            text-align: center;
-            padding: 22pt 4pt 0 4pt;
-            font-size: 10pt;
-            font-weight: bold;
-            letter-spacing: 0.1em;
-        }
     </style>
 </head>
 <body>
@@ -145,7 +132,13 @@
                     <div class="meta-value">{{ $certificate->issued_at?->format('Y 年 n 月 j 日') }}</div>
                 </td>
                 <td class="center">
-                    <span class="seal">Certify<br>LMS</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="70pt" height="70pt" viewBox="0 0 100 100" role="img" aria-label="Certify LMS">
+                        <circle cx="50" cy="50" r="50" fill="#0D9488"/>
+                        <g fill="#FFFFFF" font-family="sans-serif" font-size="14" font-weight="bold" text-anchor="middle">
+                            <text x="50" y="44">Certify</text>
+                            <text x="50" y="64">LMS</text>
+                        </g>
+                    </svg>
                 </td>
                 <td class="right"></td>
             </tr>

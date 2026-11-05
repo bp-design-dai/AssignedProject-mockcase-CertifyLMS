@@ -7,6 +7,7 @@ use App\Http\Controllers\AiChatMessageController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\Auth\OnboardingController;
 use App\Http\Controllers\BrowseController;
+use App\Http\Controllers\CertificateDownloadController;
 use App\Http\Controllers\CertificationCatalogController;
 use App\Http\Controllers\CertificationCategoryController;
 use App\Http\Controllers\CertificationCoachAssignmentController;
@@ -95,6 +96,8 @@ Route::middleware('auth')->group(function () {
 
     // ダッシュボード
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
+
+    Route::get('certificates/{certificate}/download', CertificateDownloadController::class)->name('certificates.download');
 
     // 受講登録(3 ロール共有: student=自分のみ / coach=担当範囲 / admin=全件)。
     // 認可は EnrollmentPolicy::viewAny / view で 3 ロール対応済。閲覧範囲は EnrollmentController で
