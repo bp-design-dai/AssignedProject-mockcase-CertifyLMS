@@ -100,8 +100,8 @@
                         </x-table.cell>
                         <x-table.cell>
                             <div class="text-sm text-ink-700">
-                                @if (class_exists(\App\Models\Payment::class) && $tx->relatedPayment)
-                                    {{ $tx->relatedPayment->meetingPack?->name ?? '—' }}
+                                @if ($tx->relationLoaded('relatedPayment') && $tx->relatedPayment)
+                                    {{ $tx->relatedPayment->pack_name }}
                                 @elseif ($tx->note)
                                     {{ $tx->note }}
                                 @else

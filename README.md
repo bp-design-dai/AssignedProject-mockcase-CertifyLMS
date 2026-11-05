@@ -358,3 +358,30 @@ sail exec laravel.test node --test tests/Js/ai-chat-state.test.mjs
 AI相談の画面回帰テストは `sail npm run test:ai-chat` で実行します。既存の状態保持テストに加え、テスト専用のjsdomで実際のフォーム・メッセージDOMと本番のJSを動かし、タイトルの同期・未変更保存・ON/OFF・空状態の解除を確認します。`npm ci`では開発依存もインストールしてください（検証したSail内Nodeは24.14.1）。タイトル未変更時はtitleを再送せず、自動更新設定だけを送ります。入力中のタイトルや明示的なスイッチ操作は、AI回答が到着しても上書きしません。
 
 AI回答の日本語括弧に隣接する太字は、通常のCommonMark判定を優先した限定的なトークナイザー補助で表示します。コード・エスケープ・リンク先を区別し、変換後のDOMPurifyを維持します。ウィジェットの幅制御は専用CSSに限定し、通常文は折り返し、コードと幅広い表はそれぞれの内側でスクロールします。`npm run test:ai-chat`にはMarkdown・保存履歴・新規回答・再送・幅制約のDOM回帰テストも含まれます。
+
+### 追加面談購入（S-A-03、Stripeテストモード）
+
+学習中の受講生は `/meeting-quota/checkout` から公開中かつ50円以上の面談パックを購入できます。購入開始時に購入者とパックを行ロック下で再確認し、名称・円建て金額・面談回数を `payments` に保存します。Checkout Sessionは保存値から動的に作成します。パックの `stripe_price_id` やブラウザから渡された価格は使用しません。カード入力はStripe側だけで行います。
+
+`POST /webhooks/stripe` は生のリクエスト本文と署名をStripe SDKで検証し、Checkout Sessionの現在状態を照会します。`complete` / `paid` で、Session ID・購入ID・金額・通貨が一致した場合だけ既存台帳に `purchased` を追記します。受講状態の変更は確定済み購入の付与を妨げません。処理済みイベント、購入の付与済み時刻、台帳の購入ID一意制約を同一トランザクションで確定します。Webhookが非2xxで失敗した場合はStripe再送の対象です。
+
+完了画面は購入者本人の保存状態を表示するだけです。反映待ちなら「決済の反映を確認中」と表示します。中断・カード拒否後にCheckoutを再試行できる間は保留のままで、Stripe側の失効や非同期決済失敗は付与せず記録します。返金は管理者がStripeダッシュボードで手動対応します。LMSの自動減算や返金UIはありません。既存の管理者付与は正の補填に限られます。
+
+**独立環境での接続手順**
+
+1. 作業元と別のチェックアウト・Composeプロジェクト・DBボリュームを使います。例: `CertifyLMS-sa03-live`、`certify-lms-sa03-live`、`certify_lms_sa03_live`。Webは `http://localhost:8013` を使用し、8000/8011/8012や既存DBを流用しません。独立側の `.env.example` から `.env` を作り、`APP_URL` とWebポート、DB名、セッションCookieを分けます。
+2. 接続先が独立DBであることを確認してから、その環境にだけ `php artisan migrate` と必要なデモデータ用 `php artisan db:seed`、`npm ci`、`npm run build` を実行します。`PaymentSeeder` はローカル/テスト用の決済状態別サンプルを生成し、実際のStripe通信は行いません。決済キー未設定でも従来の台帳履歴は利用でき、購入開始は503になります。
+3. 本人が[StripeサンドボックスのAPIキー](https://docs.stripe.com/keys)でテスト用Secret Keyを確認し、独立環境の `STRIPE_SECRET_KEY` に入力します。実装は `sk_test_` のキーだけを許可し、ライブモードの通知も拒否します。
+4. 本人が[Stripe CLI](https://docs.stripe.com/stripe-cli/use-cli)で同じサンドボックスにログインし、次のコマンドでWebhookを転送します。CLIが表示する署名シークレットを独立環境の `STRIPE_WEBHOOK_SECRET` に直接入力します。公開URLを使う場合は、テストモードのWorkbenchでそのHTTPSエンドポイントを登録し、そこで発行された別の署名シークレットを使用してください。
+
+   ```bash
+   stripe listen --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired --forward-to http://localhost:8013/webhooks/stripe
+   ```
+
+5. 独立環境で `php artisan config:clear` を実行し、学習中の受講生でログインします。購入パックを選び、Stripeのテスト表示を確認してから[公式のテストカード](https://docs.stripe.com/testing)で決済します。支払確定のWebhookが2xxとなり、完了画面・ダッシュボード・予約画面に購入回数が反映されることを確認します。中断や未払いでは残数が増えず、同じイベントの再送や完了画面の更新でも付与は一度だけです。
+
+キーと署名シークレットはサーバー側の独立 `.env` のみに設定し、`VITE_` 変数、Git、PR、ログ、画面キャプチャには含めません。既存DBへのマイグレーションや決済用テーブルを含む環境の初期化は行いません。
+
+自動テストは外部通信をモックします。Sailの隔離 `testing` DBで `APP_ENV=testing DB_DATABASE=testing sail artisan test tests/Feature/Stripe tests/Unit/Integrations/StripeApiCheckoutGatewayTest.php` を実行します。署名の検証には実SDKを使い、並行Webhookは別々のMySQL接続が同じ行ロックを待つことを確認します。
+
+公式仕様: [Checkoutの付与処理](https://docs.stripe.com/checkout/fulfillment?ui=full-page)、[Webhook署名](https://docs.stripe.com/webhooks/signature)。

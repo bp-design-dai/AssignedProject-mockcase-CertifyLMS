@@ -304,6 +304,11 @@ class User extends Authenticatable
         return 'notifications.'.$this->id;
     }
 
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
     public function aiChatConversations(): HasMany
     {
         return $this->hasMany(AiChatConversation::class);

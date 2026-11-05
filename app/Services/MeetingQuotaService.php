@@ -8,6 +8,7 @@ use App\Enums\MeetingQuotaTransactionType;
 use App\Models\MeetingQuotaTransaction;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * 面談回数の残数集計と履歴取得を提供するステートレス Service。
@@ -52,12 +53,10 @@ final class MeetingQuotaService
         ?MeetingQuotaTransactionType $type = null,
         int $perPage = 20,
     ): LengthAwarePaginator {
-        // 追加面談購入 Feature(Payment Model) / 面談予約 Feature(Meeting Model) が未実装の環境では、
-        // それぞれの関連の Eager Loading を省略する(belongsTo の class 解決は relation 実行時まで遅延されるため、
-        // Eager Loading しない限り未定義クラスを参照しない)。
+        // S-A-03のマイグレーション未適用環境でも従来の台帳履歴を表示する。
         $with = ['grantedBy'];
-        if (class_exists('App\\Models\\Payment')) {
-            $with[] = 'relatedPayment.meetingPack';
+        if (Schema::hasTable('payments')) {
+            $with[] = 'relatedPayment';
         }
         if (class_exists('App\\Models\\Meeting')) {
             $with[] = 'relatedMeeting.enrollment.certification';

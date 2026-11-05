@@ -62,10 +62,10 @@ class MeetingPack extends Model
         return $this->belongsTo(User::class, 'updated_by_user_id');
     }
 
-    /** Paymentは追加面談購入機能の所有。関連の利用は導入後に限る。 */
+    /** @return HasMany<Payment, $this> */
     public function payments(): HasMany
     {
-        return $this->hasMany('App\\Models\\Payment', 'meeting_pack_id');
+        return $this->hasMany(Payment::class);
     }
 
     public function hasPurchaseHistory(): bool
@@ -83,6 +83,17 @@ class MeetingPack extends Model
     public function scopePublished(Builder $query): Builder
     {
         return $query->where('status', MeetingPackStatus::Published);
+    }
+
+    /**
+     * @param Builder<MeetingPack> $query
+     *
+     * @return Builder<MeetingPack>
+     */
+    public function scopePurchasableWithStripe(Builder $query): Builder
+    {
+        // Stripe's minimum charge when settling in Japanese yen is 50 JPY.
+        return $query->published()->where('price', '>=', 50)->where('meeting_count', '>', 0);
     }
 
     /**
