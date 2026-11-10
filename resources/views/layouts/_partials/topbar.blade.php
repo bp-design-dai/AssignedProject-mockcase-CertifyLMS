@@ -44,8 +44,12 @@
     <div class="flex-1"></div>
 
     {{-- 通知ベル + 通知ポップオーバー(ベル横アンカー) --}}
-    @if (Route::has('notifications.index'))
-        <div class="relative" data-notification-popover-root>
+    @if ($user && in_array($user->role, [\App\Enums\UserRole::Student, \App\Enums\UserRole::Coach], true) && Route::has('api.v1.notifications.index'))
+        <div class="relative" data-notification-popover-root
+            data-index-url="{{ route('api.v1.notifications.index', [], false) }}"
+            data-read-all-url="{{ route('api.v1.notifications.readAll', [], false) }}"
+            data-read-url="{{ route('api.v1.notifications.read', ['notification' => '__notification__'], false) }}"
+        >
             <button
                 type="button"
                 data-notification-popover-trigger
