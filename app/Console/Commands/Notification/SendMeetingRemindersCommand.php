@@ -12,7 +12,7 @@ class SendMeetingRemindersCommand extends Command
 {
     protected $signature = 'notifications:send-meeting-reminders {--window= : eve または one_hour_before}';
 
-    protected $description = '予約済み面談の前日・1時間前リマインダーを同期配信する';
+    protected $description = '予約済み面談の前日・1時間前リマインダーの配信を受け付ける';
 
     public function handle(SendMeetingRemindersAction $action): int
     {
@@ -23,7 +23,7 @@ class SendMeetingRemindersCommand extends Command
             return self::INVALID;
         }
         $result = $action($window);
-        $this->info('対象面談'.$result['meetings'].'件、送信'.$result['sent'].'件、失敗'.$result['failed'].'件（通知方法ごと）');
+        $this->info('対象面談'.$result['meetings'].'件、送信受付'.$result['queued'].'件、失敗'.$result['failed'].'件（通知方法ごと）');
 
         return $result['failed'] > 0 ? self::FAILURE : self::SUCCESS;
     }

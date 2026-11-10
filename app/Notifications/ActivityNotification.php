@@ -11,7 +11,7 @@ use App\Models\User;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-/** 受講中の業務通知。同期配信のみとし、本文・秘密情報はメールへ転載しない。 */
+/** 受講中の業務通知。配信はジョブに委譲し、本文・秘密情報はメールへ転載しない。 */
 final class ActivityNotification extends Notification
 {
     public function __construct(

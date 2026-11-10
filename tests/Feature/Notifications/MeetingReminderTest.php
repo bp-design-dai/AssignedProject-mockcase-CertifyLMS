@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Notifications;
 
 use App\Enums\MeetingReminderWindow;
+use App\Jobs\DeliverMeetingReminder;
 use App\Models\Meeting;
 use App\Models\MeetingReminderDelivery;
 use App\Models\User;
@@ -147,7 +148,8 @@ class MeetingReminderTest extends TestCase
         $this->assertSame(2, MeetingReminderDelivery::where('channel', 'database')->whereNotNull('sent_at')->count());
         $this->assertSame(2, MeetingReminderDelivery::where('channel', 'mail')->whereNull('sent_at')->count());
         Notification::swap($manager);
-        $this->assertResult($this->runReminder(), 1, 2);
+        $this->assertResult($this->runReminder(), 1, 0);
+        $this->retryFailedChannels();
         $this->assertEqualsCanonicalizing($ids, DatabaseNotification::pluck('id')->all());
         $this->assertCount(2, $this->mails());
         $this->assertSame(4, MeetingReminderDelivery::whereNotNull('sent_at')->count());
@@ -168,7 +170,8 @@ class MeetingReminderTest extends TestCase
         }
         $this->assertCount(2, $this->mails());
         $this->assertDatabaseCount('notifications', 1);
-        $this->assertResult($this->runReminder(), 1, 1);
+        $this->assertResult($this->runReminder(), 1, 0);
+        $this->retryFailedChannels();
         $this->assertCount(2, $this->mails());
         $this->assertDatabaseCount('notifications', 2);
         $this->assertSame(4, MeetingReminderDelivery::whereNotNull('sent_at')->count());
@@ -281,7 +284,7 @@ class MeetingReminderTest extends TestCase
         Meeting::factory()->create(['scheduled_at' => now()->addHour()]);
         Notification::shouldReceive('sendNow')->twice()->andThrow(new \RuntimeException);
         $this->artisan('notifications:send-meeting-reminders', ['--window' => 'one_hour_before'])
-            ->expectsOutput('対象面談1件、送信2件、失敗2件（通知方法ごと）')->assertExitCode(1);
+            ->expectsOutput('対象面談1件、送信受付2件、失敗2件（通知方法ごと）')->assertExitCode(1);
         $this->artisan('notifications:send-meeting-reminders', ['--window' => 'invalid'])->assertExitCode(2);
         $this->artisan('notifications:send-meeting-reminders')->assertExitCode(2);
     }
@@ -297,9 +300,17 @@ class MeetingReminderTest extends TestCase
         return app(SendMeetingRemindersAction::class)($window);
     }
 
-    private function assertResult(array $actual, int $meetings, int $sent, int $failed = 0): void
+    private function assertResult(array $actual, int $meetings, int $queued, int $failed = 0): void
     {
-        $this->assertSame(compact('meetings', 'sent', 'failed'), $actual);
+        $this->assertSame(compact('meetings', 'queued', 'failed'), $actual);
+    }
+
+    private function retryFailedChannels(): void
+    {
+        // Scheduler must not bypass the job attempt limit. Retry only failed worker jobs.
+        foreach (MeetingReminderDelivery::whereNotNull('failed_at')->get() as $delivery) {
+            app()->call([new DeliverMeetingReminder($delivery->id, CarbonImmutable::now()->toIso8601String()), 'handle']);
+        }
     }
 
     private function mails()

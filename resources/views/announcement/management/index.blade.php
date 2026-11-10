@@ -22,6 +22,20 @@
             <x-link-button :href="route('admin.announcements.create')" variant="primary">+ 新規配信</x-link-button>
         </header>
 
+        @if ($dispatches->isNotEmpty())
+            <x-card padding="md" shadow="sm">
+                <h2 class="font-semibold text-ink-900">最近の配信受付</h2>
+                <p class="mt-1 text-xs text-ink-600">配信履歴は処理が完了し、1件以上の配信が成功した後に表示されます。更新して結果を確認してください。</p>
+                @foreach ($dispatches as $dispatch)
+                    <div class="mt-3 text-sm text-ink-700">
+                        <span class="font-semibold">{{ $dispatch->payload['title'] }}</span>
+                        <span class="ml-2">{{ ['queued' => '受付済み', 'processing' => '処理中', 'completed' => '処理完了', 'failed' => '配信失敗'][$dispatch->status] }}</span>
+                        <span class="ml-2">成功 {{ $dispatch->succeeded_count }} 件 ／ 失敗 {{ $dispatch->failed_count }} 件</span>
+                    </div>
+                @endforeach
+            </x-card>
+        @endif
+
         <x-card padding="none" shadow="sm">
             @if ($announcements->isEmpty())
                 <div class="px-6 py-12">

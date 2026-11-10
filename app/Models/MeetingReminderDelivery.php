@@ -13,9 +13,9 @@ class MeetingReminderDelivery extends Model
 {
     use HasUlids;
 
-    protected $fillable = ['meeting_id', 'user_id', 'window', 'channel', 'sent_at'];
+    protected $fillable = ['meeting_id', 'user_id', 'window', 'channel', 'sent_at', 'queued_at', 'failed_at', 'skipped_at', 'exception_class'];
 
-    protected $casts = ['window' => MeetingReminderWindow::class, 'sent_at' => 'datetime'];
+    protected $casts = ['window' => MeetingReminderWindow::class, 'sent_at' => 'datetime', 'queued_at' => 'datetime', 'failed_at' => 'datetime', 'skipped_at' => 'datetime'];
 
     public function meeting(): BelongsTo
     {

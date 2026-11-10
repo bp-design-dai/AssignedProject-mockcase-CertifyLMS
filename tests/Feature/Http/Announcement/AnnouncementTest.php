@@ -100,7 +100,7 @@ class AnnouncementTest extends TestCase
         Notification::shouldReceive('sendNow')->times(3)->andThrow(new \RuntimeException('非公開メールアドレス・本文を出力しない'));
         Log::shouldReceive('warning')->times(3)->with('Announcement delivery failed', \Mockery::on(fn ($context) => array_keys($context) === ['dispatch_id', 'exception_class'] && $context['exception_class'] === \RuntimeException::class));
         $data = $this->payload();
-        $this->actingAs(User::factory()->admin()->create())->postJson(route('admin.announcements.store'), $data)->assertUnprocessable()->assertJsonValidationErrors('target_type');
+        $this->actingAs(User::factory()->admin()->create())->postJson(route('admin.announcements.store'), $data)->assertRedirect(route('admin.announcements.index'))->assertSessionHas('success', 'お知らせの配信を受け付けました。');
         $this->assertDatabaseCount('announcements', 0);
         $this->assertDatabaseCount('notifications', 0);
         $this->postJson(route('admin.announcements.store'), $data)->assertConflict();
@@ -117,7 +117,7 @@ class AnnouncementTest extends TestCase
                 throw new \RuntimeException('メール失敗');
             }
         });
-        $this->actingAs(User::factory()->admin()->create())->post(route('admin.announcements.store'), $this->payload())->assertSessionHasNoErrors()->assertSessionHas('success', 'お知らせを配信しました。（成功2件／失敗1件）');
+        $this->actingAs(User::factory()->admin()->create())->post(route('admin.announcements.store'), $this->payload())->assertSessionHasNoErrors()->assertSessionHas('success', 'お知らせの配信を受け付けました。');
         $this->assertSame($users->pluck('id')->all(), $attempts);
         $this->assertSame(2, Announcement::sole()->dispatched_count);
         $this->assertSame(1, Announcement::sole()->failed_count);

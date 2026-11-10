@@ -169,9 +169,9 @@ class CancelQuotaRegressionTest extends TestCase
     {
         $meeting = $this->consumedMeeting(['scheduled_at' => '2030-06-11 10:00:00']);
         $this->actingAs($meeting->student)->post(route('meetings.cancel', $meeting))->assertRedirect();
-        $this->assertSame(['meetings' => 0, 'sent' => 0, 'failed' => 0], app(SendMeetingRemindersAction::class)(MeetingReminderWindow::Eve));
+        $this->assertSame(['meetings' => 0, 'queued' => 0, 'failed' => 0], app(SendMeetingRemindersAction::class)(MeetingReminderWindow::Eve));
         CarbonImmutable::setTestNow(CarbonImmutable::parse('2030-06-11 09:00:00', 'Asia/Tokyo'));
-        $this->assertSame(['meetings' => 0, 'sent' => 0, 'failed' => 0], app(SendMeetingRemindersAction::class)(MeetingReminderWindow::OneHourBefore));
+        $this->assertSame(['meetings' => 0, 'queued' => 0, 'failed' => 0], app(SendMeetingRemindersAction::class)(MeetingReminderWindow::OneHourBefore));
         $this->assertDatabaseCount('meeting_reminder_deliveries', 0);
         $this->assertDatabaseCount('notifications', 2);
     }
