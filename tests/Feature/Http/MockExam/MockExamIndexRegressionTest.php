@@ -187,7 +187,7 @@ class MockExamIndexRegressionTest extends TestCase
         }
     }
 
-    public function test_existing_question_count_display_is_preserved_without_fixing_separate_count_defect(): void
+    public function test_admin_question_count_display_matches_the_existing_relation(): void
     {
         $admin = User::factory()->admin()->create();
         $exam = MockExam::factory()->create();
@@ -199,8 +199,7 @@ class MockExamIndexRegressionTest extends TestCase
             $document->loadHTML('<?xml encoding="UTF-8">'.$response->getContent());
             $cells = (new \DOMXPath($document))->query('//a[@href="'.route('admin.mock-exams.show', $exam).'"]/ancestor::tr[1]/td[3]');
             $this->assertGreaterThan(0, $cells->length);
-            // T-A-01 keeps the supplied UI's 0 fallback; correcting the absent count is a separate defect.
-            $this->assertSame('0', trim($cells->item(0)->textContent));
+            $this->assertSame('3', trim($cells->item(0)->textContent));
             $this->assertSame(3, $exam->mockExamQuestions()->count());
         } finally {
             libxml_clear_errors();
