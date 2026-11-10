@@ -27,10 +27,10 @@
     <div class="mt-6 space-y-3">
         @forelse ($chapters as $chapter)
             @php
-                $total = (int) ($chapter->sections_total_count ?? 0);
-                $done = (int) ($completedByChapter[$chapter->id] ?? 0);
-                $isCompleted = $total > 0 && $done >= $total;
-                $ratio = $total > 0 ? (int) round($done / $total * 100) : 0;
+                $total = $chapterProgress[$chapter->id]['total'];
+                $done = $chapterProgress[$chapter->id]['done'];
+                $isCompleted = $chapterProgress[$chapter->id]['isCompleted'];
+                $ratio = $chapterProgress[$chapter->id]['percent'];
             @endphp
             <a href="{{ route('learning.chapters.show', $chapter) }}"
                 class="group block rounded-xl border bg-surface-raised px-5 py-4 shadow-sm hover:-translate-y-px hover:shadow-md transition-all
