@@ -8,7 +8,7 @@ use App\Enums\CertificationStatus;
 use App\Enums\ContentStatus;
 use App\Models\Part;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
+use App\Services\LearningProgressService;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -21,6 +21,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  */
 final class ShowPartAction
 {
+    public function __construct(private readonly LearningProgressService $progress) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -35,41 +37,19 @@ final class ShowPartAction
 
         Gate::forUser($student)->authorize('learning.part.view', $part);
 
-        $chapters = $part->chapters()
-            ->where('status', ContentStatus::Published->value)
-            ->ordered()
-            ->withCount([
-                'sections as sections_total_count' => fn ($q) => $q
-                    ->where('status', ContentStatus::Published->value),
-            ])
-            ->get();
+        $chapters = $this->progress->chaptersWithSectionTotals($part);
 
         $enrollment = $student->enrollments()
             ->where('certification_id', $part->certification_id)
             ->first();
 
-        $completedByChapter = [];
-        if ($enrollment !== null && $chapters->isNotEmpty()) {
-            $rows = DB::table('sections')
-                ->join('section_progresses', function ($join) use ($enrollment) {
-                    $join->on('section_progresses.section_id', '=', 'sections.id')
-                        ->where('section_progresses.enrollment_id', '=', $enrollment->id);
-                })
-                ->whereIn('sections.chapter_id', $chapters->pluck('id'))
-                ->where('sections.status', ContentStatus::Published->value)
-                ->groupBy('sections.chapter_id')
-                ->selectRaw('sections.chapter_id AS chapter_id, COUNT(*) AS done')
-                ->get();
-
-            foreach ($rows as $row) {
-                $completedByChapter[(string) $row->chapter_id] = (int) $row->done;
-            }
-        }
+        $completedByChapter = $this->progress->completedSectionsByChapter($enrollment, $chapters);
 
         return [
             'part' => $part->load('certification'),
             'chapters' => $chapters,
             'completedByChapter' => $completedByChapter,
+            'chapterProgress' => $this->progress->chapterProgress($chapters, $completedByChapter),
         ];
     }
 }
