@@ -27,6 +27,10 @@ final class IndexAction
     ): LengthAwarePaginator {
         $query = MockExam::query();
 
+        if ($auth->role === UserRole::Admin) {
+            $query->with(['certification', 'createdBy', 'updatedBy']);
+        }
+
         if ($auth->role === UserRole::Coach) {
             $query->whereHas(
                 'certification.coaches',
