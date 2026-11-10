@@ -64,7 +64,7 @@ final class MeetingReminderDeliveryService
 
         return DB::transaction(function () use ($delivery, $window, $channel, $now) {
             $delivery = MeetingReminderDelivery::whereKey($delivery->id)->lockForUpdate()->firstOrFail();
-            if ($delivery->sent_at !== null) {
+            if ($delivery->sent_at !== null || $delivery->skipped_at !== null) {
                 return false;
             }
 
@@ -81,7 +81,8 @@ final class MeetingReminderDeliveryService
                 return false;
             }
             $user = $users->get($delivery->user_id);
-            if (! $user) {
+            // 元の通知枠は維持し、全ロック取得後の現在時刻で開始済みの面談を除外する。
+            if (! $user || $meeting->scheduled_at->lessThanOrEqualTo(CarbonImmutable::now(config('app.timezone')))) {
                 return false;
             }
 
