@@ -30,7 +30,7 @@ final class AnnouncementController extends Controller
     public function store(StoreRequest $request, StoreAction $action): RedirectResponse
     {
         try {
-            $announcement = $action($request->user(), $request->validated());
+            $dispatch = $action($request->user(), $request->validated());
         } catch (ValidationException $exception) {
             if ($request->expectsJson()) {
                 throw $exception;
@@ -39,7 +39,7 @@ final class AnnouncementController extends Controller
             return back()->withInput()->withErrors($exception->errors())->with('error', $exception->errors()['target_type'][0]);
         }
 
-        return redirect()->route('admin.announcements.show', $announcement)->with('success', 'お知らせを配信しました。（成功'.$announcement->dispatched_count.'件／失敗'.$announcement->failed_count.'件）');
+        return redirect()->route($dispatch->status === 'completed' ? 'admin.announcements.show' : 'admin.announcements.index', $dispatch->status === 'completed' ? $dispatch->id : [])->with('success', 'お知らせの配信を受け付けました。');
     }
 
     public function show(Request $request, Announcement $announcement, ShowAction $action): View

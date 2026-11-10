@@ -9,6 +9,7 @@ use App\Enums\MeetingReminderWindow;
 use App\Enums\MeetingStatus;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
+use App\Jobs\DeliverMeetingReminder;
 use App\Models\Meeting;
 use App\Models\MeetingReminderDelivery;
 use App\Models\User;
@@ -28,6 +29,31 @@ final class MeetingReminderDeliveryService
             ->whereHas('coach', fn (Builder $users) => $users->where('role', UserRole::Coach)->where('status', UserStatus::InProgress));
     }
 
+    public function enqueue(Meeting $meeting, string $userId, MeetingReminderWindow $window, string $channel, CarbonImmutable $now): bool
+    {
+        $delivery = MeetingReminderDelivery::firstOrCreate(['meeting_id' => $meeting->id, 'user_id' => $userId, 'window' => $window->value, 'channel' => $channel]);
+
+        return DB::transaction(function () use ($delivery, $now) {
+            $locked = MeetingReminderDelivery::whereKey($delivery->id)->lockForUpdate()->firstOrFail();
+            if ($locked->sent_at !== null || $locked->queued_at !== null) {
+                return false;
+            }
+            $locked->update(['queued_at' => $now]);
+            DB::afterCommit(function () use ($locked, $now) {
+                try {
+                    DeliverMeetingReminder::dispatch($locked->id, $now->toIso8601String());
+                } catch (\Throwable $exception) {
+                    if ($locked->fresh()?->failed_at === null) {
+                        $locked->update(['queued_at' => null, 'exception_class' => $exception::class]);
+                    }
+                    throw $exception;
+                }
+            });
+
+            return true;
+        });
+    }
+
     public function send(Meeting $meeting, string $userId, MeetingReminderWindow $window, string $channel, CarbonImmutable $now): bool
     {
         if (! in_array($channel, ['database', 'mail'], true)) {
@@ -38,7 +64,7 @@ final class MeetingReminderDeliveryService
 
         return DB::transaction(function () use ($delivery, $window, $channel, $now) {
             $delivery = MeetingReminderDelivery::whereKey($delivery->id)->lockForUpdate()->firstOrFail();
-            if ($delivery->sent_at !== null) {
+            if ($delivery->sent_at !== null || $delivery->skipped_at !== null) {
                 return false;
             }
 
@@ -55,7 +81,8 @@ final class MeetingReminderDeliveryService
                 return false;
             }
             $user = $users->get($delivery->user_id);
-            if (! $user) {
+            // 元の通知枠は維持し、全ロック取得後の現在時刻で開始済みの面談を除外する。
+            if (! $user || $meeting->scheduled_at->lessThanOrEqualTo(CarbonImmutable::now(config('app.timezone')))) {
                 return false;
             }
 
@@ -69,7 +96,7 @@ final class MeetingReminderDeliveryService
                 $user->notifyNow($notification, ['mail']);
             }
             // DB通知とその送信状態を同じTransactionで確定。メールは正常終了後のみ記録する。
-            $delivery->update(['sent_at' => $now]);
+            $delivery->update(['sent_at' => now(), 'failed_at' => null, 'skipped_at' => null, 'exception_class' => null]);
 
             return true;
         });

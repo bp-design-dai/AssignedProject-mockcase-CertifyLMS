@@ -12,7 +12,7 @@ class AnnouncementDispatch extends Model
 {
     use HasUlids;
 
-    protected $fillable = ['idempotency_key', 'created_by_user_id', 'payload_hash', 'completed_at'];
+    protected $fillable = ['idempotency_key', 'created_by_user_id', 'payload_hash', 'completed_at', 'payload', 'status', 'prepared_at', 'target_count', 'succeeded_count', 'failed_count', 'exception_class'];
 
-    protected $casts = ['completed_at' => 'datetime'];
+    protected $casts = ['completed_at' => 'datetime', 'prepared_at' => 'datetime', 'payload' => 'array', 'target_count' => 'integer', 'succeeded_count' => 'integer', 'failed_count' => 'integer'];
 }

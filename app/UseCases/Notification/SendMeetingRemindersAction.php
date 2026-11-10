@@ -16,14 +16,14 @@ final class SendMeetingRemindersAction
     public function __invoke(MeetingReminderWindow $window): array
     {
         $now = CarbonImmutable::now(config('app.timezone'));
-        $result = ['meetings' => 0, 'sent' => 0, 'failed' => 0];
+        $result = ['meetings' => 0, 'queued' => 0, 'failed' => 0];
         foreach ($this->delivery->targets($window, $now)->lazyById(100) as $meeting) {
             $result['meetings']++;
             foreach ([$meeting->student_id, $meeting->coach_id] as $userId) {
                 foreach (['database', 'mail'] as $channel) {
                     try {
-                        if ($this->delivery->send($meeting, $userId, $window, $channel, $now)) {
-                            $result['sent']++;
+                        if ($this->delivery->enqueue($meeting, $userId, $window, $channel, $now)) {
+                            $result['queued']++;
                         }
                     } catch (\Throwable $exception) {
                         $result['failed']++;

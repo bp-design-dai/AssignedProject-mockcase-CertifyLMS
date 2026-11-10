@@ -6,17 +6,23 @@ namespace App\Mail;
 
 use App\Models\Invitation;
 use App\Services\InvitationTokenService;
+use App\Support\NotificationQueueOptions;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class InvitationMail extends Mailable
+class InvitationMail extends Mailable implements ShouldQueue
 {
-    use Queueable, SerializesModels;
+    use NotificationQueueOptions, Queueable, SerializesModels;
 
-    public function __construct(public Invitation $invitation) {}
+    public function __construct(public Invitation $invitation)
+    {
+        $this->afterCommit();
+        $this->onQueue('notifications');
+    }
 
     public function envelope(): Envelope
     {
