@@ -8,7 +8,7 @@
     role="dialog"
     aria-modal="false"
     aria-label="通知"
-    class="hidden absolute right-0 mt-2 w-[400px] max-w-[calc(100vw-1rem)] max-h-[70vh] z-30 origin-top-right rounded-lg shadow-lg border border-subtle bg-white opacity-0 -translate-y-1 transition duration-150 ease-out flex-col"
+    class="hidden fixed right-2 top-16 sm:absolute sm:right-0 sm:top-auto mt-2 w-[calc(100%_-_1rem)] sm:w-[400px] max-w-[calc(100vw-1rem)] max-h-[70vh] z-30 origin-top-right rounded-lg shadow-lg border border-subtle bg-white opacity-0 -translate-y-1 transition duration-150 ease-out flex-col"
     style="display: none;"
 >
     {{-- ヘッダ: タブ + 全件既読 --}}
@@ -34,6 +34,12 @@
             data-notification-popover-mark-all
             class="text-xs font-semibold text-primary-700 hover:text-primary-800 hover:underline transition-colors"
         >全件既読</button>
+    </div>
+
+    <div data-notification-popover-error role="alert" class="hidden px-4 py-3 text-xs text-red-700 bg-red-50">
+        <p data-notification-popover-error-text></p>
+        <button type="button" data-notification-popover-retry class="mt-2 font-semibold underline">再試行</button>
+        <a href="{{ route('login') }}" data-notification-popover-login class="hidden ml-2 font-semibold underline">ログイン画面へ</a>
     </div>
 
     {{-- ボディ: 通知行リスト (内部スクロール) --}}
@@ -72,7 +78,7 @@
             <a
                 href="#"
                 data-notification-popover-row
-                class="flex items-start gap-3 px-4 py-3 hover:bg-ink-50 transition-colors aria-[data-unread=true]:bg-primary-50/30"
+                class="flex items-start gap-3 px-4 py-3 hover:bg-ink-50 transition-colors"
             >
                 <span data-notification-popover-row-dot class="mt-2 inline-block w-2 h-2 rounded-full bg-primary-600 shrink-0"></span>
                 <div class="min-w-0 flex-1">
