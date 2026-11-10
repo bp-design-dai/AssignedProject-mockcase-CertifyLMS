@@ -18,8 +18,10 @@ use App\Services\MeetingQuotaService;
 use App\UseCases\GoogleCalendar\DisconnectAction;
 use Database\Seeders\GoogleCalendarDemoSeeder;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\Support\MeetingActionTestCase;
 
+#[Group('external-api')]
 class MeetingCalendarTest extends MeetingActionTestCase
 {
     private $gateway;

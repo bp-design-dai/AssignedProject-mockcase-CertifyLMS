@@ -7,12 +7,14 @@ namespace Tests\Unit\Integrations;
 use App\Integrations\Stripe\StripeApiCheckoutGateway;
 use App\Models\Payment;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Stripe\ApiRequestor;
 use Stripe\HttpClient\ClientInterface;
-use Stripe\HttpClient\CurlClient;
 use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
+use Tests\Support\ExternalApiGuard;
 use Tests\TestCase;
 
+#[Group('external-api')]
 class StripeApiCheckoutGatewayTest extends TestCase
 {
     private ClientInterface $http;
@@ -49,7 +51,7 @@ class StripeApiCheckoutGatewayTest extends TestCase
 
     protected function tearDown(): void
     {
-        ApiRequestor::setHttpClient(new CurlClient);
+        ExternalApiGuard::protectStripe();
         parent::tearDown();
     }
 

@@ -12,10 +12,12 @@ use App\Services\MeetingQuotaService;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\Process\Process;
 use Tests\Support\StripeFixtures;
 use Tests\TestCase;
 
+#[Group('external-api')]
 class WebhookConcurrencyTest extends TestCase
 {
     use DatabaseMigrations, StripeFixtures;

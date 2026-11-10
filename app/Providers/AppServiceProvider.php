@@ -17,6 +17,7 @@ use App\View\Composers\NotificationBadgeComposer;
 use App\View\Composers\SectionPageMetaComposer;
 use App\View\Composers\SidebarBadgeComposer;
 use GuzzleHttp\Client;
+use GuzzleHttp\ClientInterface;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -27,7 +28,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(EnrollmentStatsService::class);
         $this->app->bind(StripeCheckoutGateway::class, StripeApiCheckoutGateway::class);
         $this->app->bind(GeminiGateway::class, HttpGeminiGateway::class);
-        $this->app->bind(GoogleCalendarGateway::class, fn () => new GoogleApiCalendarGateway(new Client(['connect_timeout' => 2, 'timeout' => 5])));
+        $this->app->bind(ClientInterface::class, fn () => new Client(['connect_timeout' => 2, 'timeout' => 5]));
+        $this->app->bind(GoogleCalendarGateway::class, fn () => new GoogleApiCalendarGateway($this->app->make(ClientInterface::class)));
     }
 
     public function boot(): void

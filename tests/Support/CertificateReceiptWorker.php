@@ -7,10 +7,12 @@ use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\ExternalApiGuard;
 
-require __DIR__.'/../../vendor/autoload.php';
+require __DIR__.'/../bootstrap.php';
 $app = require __DIR__.'/../../bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
+ExternalApiGuard::install($app);
 
 if (! app()->environment('testing') || DB::getDriverName() !== 'mysql' || ! preg_match('/^testing(?:_\w+)?$/', DB::connection()->getDatabaseName())) {
     fwrite(STDERR, 'Only an isolated MySQL testing database is allowed.');

@@ -12,8 +12,10 @@ use App\Models\Enrollment;
 use App\Models\LearningSession;
 use App\Services\AiChatContextService;
 use App\UseCases\AiChat\StoreAction;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\Support\AiChatTestCase;
 
+#[Group('external-api')]
 class ContextTest extends AiChatTestCase
 {
     public function test_same_section_reuses_own_conversation_and_other_students_are_separate(): void

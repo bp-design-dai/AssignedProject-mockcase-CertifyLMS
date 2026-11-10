@@ -6,6 +6,7 @@ namespace Tests;
 
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Application;
+use Tests\Support\ExternalApiGuard;
 
 trait CreatesApplication
 {
@@ -17,6 +18,8 @@ trait CreatesApplication
         $app = require __DIR__.'/../bootstrap/app.php';
 
         $app->make(Kernel::class)->bootstrap();
+
+        ExternalApiGuard::install($app);
 
         return $app;
     }

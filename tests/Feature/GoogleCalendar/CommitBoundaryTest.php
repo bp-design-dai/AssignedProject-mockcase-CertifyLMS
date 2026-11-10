@@ -18,9 +18,11 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
 /** Real commits (no wrapping test transaction) plus an independent connection probe. */
+#[Group('external-api')]
 class CommitBoundaryTest extends TestCase
 {
     use DatabaseMigrations;

@@ -14,8 +14,10 @@ use App\Models\AiChatMessage;
 use App\Models\User;
 use Database\Seeders\AiChatSeeder;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\Support\AiChatTestCase;
 
+#[Group('external-api')]
 class ConversationTest extends AiChatTestCase
 {
     public function test_create_show_resume_and_delete_own_conversation(): void

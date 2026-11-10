@@ -19,9 +19,11 @@ use App\Services\MeetingQuotaService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\Support\StripeFixtures;
 use Tests\TestCase;
 
+#[Group('external-api')]
 class BookingIntegrationTest extends TestCase
 {
     use RefreshDatabase, StripeFixtures;

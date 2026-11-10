@@ -12,10 +12,12 @@ use App\Services\MeetingQuotaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 use Tests\Support\StripeFixtures;
 use Tests\TestCase;
 
+#[Group('external-api')]
 class CheckoutTest extends TestCase
 {
     use RefreshDatabase, StripeFixtures;
