@@ -18,4 +18,14 @@ class TrimStrings extends Middleware
         'password',
         'password_confirmation',
     ];
+
+    protected function transform($key, $value)
+    {
+        // Do not normalize invalid email line breaks into a valid address before validation.
+        if (($key === 'email' || str_ends_with($key, '.email')) && is_string($value) && strpbrk($value, "\r\n") !== false) {
+            return $value;
+        }
+
+        return parent::transform($key, $value);
+    }
 }

@@ -11,6 +11,7 @@ use App\Integrations\Gemini\HttpGeminiGateway;
 use App\Integrations\GoogleCalendar\GoogleApiCalendarGateway;
 use App\Integrations\Stripe\StripeApiCheckoutGateway;
 use App\Services\EnrollmentStatsService;
+use App\Validation\EmailValidator;
 use App\View\Composers\AiChatWidgetComposer;
 use App\View\Composers\EnrollmentSwitcherComposer;
 use App\View\Composers\NotificationBadgeComposer;
@@ -18,6 +19,7 @@ use App\View\Composers\SectionPageMetaComposer;
 use App\View\Composers\SidebarBadgeComposer;
 use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -34,6 +36,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Validator::resolver(fn ($translator, $data, $rules, $messages, $attributes) => new EmailValidator($translator, $data, $rules, $messages, $attributes));
+
         View::composer('layouts._partials.sidebar-*', SidebarBadgeComposer::class);
         View::composer('layouts._partials.topbar', NotificationBadgeComposer::class);
         View::composer('components.enrollment-switcher', EnrollmentSwitcherComposer::class);
