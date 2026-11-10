@@ -20,6 +20,8 @@ use App\Models\User;
  */
 final class EnrollmentStatusChangeService
 {
+    public function __construct(private readonly EnrollmentStatsService $stats) {}
+
     /**
      * @param Enrollment $enrollment 状態遷移する対象 Enrollment
      * @param ?EnrollmentStatus $fromStatus 遷移前ステータス(初回登録時のみ null、それ以降は必須)
@@ -34,12 +36,15 @@ final class EnrollmentStatusChangeService
         ?User $changedBy,
         ?string $reason = null,
     ): EnrollmentStatusLog {
-        return $enrollment->statusLogs()->create([
+        $log = $enrollment->statusLogs()->create([
             'from_status' => $fromStatus?->value,
             'to_status' => $toStatus->value,
             'changed_by_user_id' => $changedBy?->id,
             'changed_reason' => $reason,
             'changed_at' => now(),
         ]);
+        $this->stats->invalidateAfterCommit($enrollment->getConnectionName());
+
+        return $log;
     }
 }
