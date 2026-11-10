@@ -9,8 +9,10 @@ use App\Integrations\Gemini\HttpGeminiGateway;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
+#[Group('external-api')]
 class GeminiGatewayTest extends TestCase
 {
     protected function setUp(): void

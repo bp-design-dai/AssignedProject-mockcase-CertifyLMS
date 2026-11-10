@@ -15,8 +15,10 @@ use App\UseCases\AiChat\UpdateAction;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\Support\AiChatTestCase;
 
+#[Group('external-api')]
 class MessageTest extends AiChatTestCase
 {
     #[DataProvider('messageLengths')]

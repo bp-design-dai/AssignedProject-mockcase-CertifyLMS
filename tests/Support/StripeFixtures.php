@@ -7,8 +7,6 @@ namespace Tests\Support;
 use App\Contracts\StripeCheckoutGateway;
 use App\Models\Payment;
 use Illuminate\Support\Facades\Http;
-use Stripe\ApiRequestor;
-use Stripe\HttpClient\ClientInterface;
 
 trait StripeFixtures
 {
@@ -20,13 +18,7 @@ trait StripeFixtures
         $this->gateway = new FakeStripeGateway;
         $this->app->instance(StripeCheckoutGateway::class, $this->gateway);
         Http::preventStrayRequests();
-        ApiRequestor::setHttpClient(new class implements ClientInterface
-        {
-            public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null)
-            {
-                throw new \LogicException('Real Stripe network calls are forbidden in tests.');
-            }
-        });
+        ExternalApiGuard::protectStripe();
     }
 
     protected function pendingPayment(array $attributes = []): Payment
@@ -46,8 +38,7 @@ trait StripeFixtures
 
     protected function stripePost(string $payload, ?string $signature = null)
     {
-        $timestamp = time();
-        $signature ??= 't='.$timestamp.',v1='.hash_hmac('sha256', $timestamp.'.'.$payload, 'whsec_sa03_fake');
+        $signature ??= StripeWebhookSignature::sign($payload, 'whsec_sa03_fake');
 
         return $this->call('POST', '/webhooks/stripe', [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_STRIPE_SIGNATURE' => $signature], $payload);
     }

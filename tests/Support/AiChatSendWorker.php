@@ -12,8 +12,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Tests\Support\ExternalApiGuard;
 
-require __DIR__.'/../../vendor/autoload.php';
+require __DIR__.'/../bootstrap.php';
 $app = require __DIR__.'/../../bootstrap/app.php';
 $create = ($argv[3] ?? 'send') === 'create';
 $request = Request::create($create ? '/ai-chat/conversations' : '/ai-chat/conversations/'.$argv[2].'/messages', 'POST',
@@ -21,6 +22,7 @@ $request = Request::create($create ? '/ai-chat/conversations' : '/ai-chat/conver
 $app->instance('request', $request);
 $kernel = $app->make(Kernel::class);
 $kernel->bootstrap();
+ExternalApiGuard::install($app);
 if (! $app->environment('testing') || DB::getDriverName() !== 'mysql' || ! preg_match('/^testing(?:_\w+)?$/', DB::connection()->getDatabaseName())) {
     throw new RuntimeException('An isolated MySQL testing database is required.');
 }

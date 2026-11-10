@@ -15,9 +15,11 @@ use Database\Seeders\PaymentSeeder;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\Support\StripeFixtures;
 use Tests\TestCase;
 
+#[Group('external-api')]
 class CommitAndMigrationTest extends TestCase
 {
     use DatabaseMigrations, StripeFixtures;

@@ -13,10 +13,13 @@ use App\Models\User;
 use App\Services\MeetingQuotaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 use Tests\Support\StripeFixtures;
+use Tests\Support\StripeWebhookSignature;
 use Tests\TestCase;
 
+#[Group('external-api')]
 class WebhookTest extends TestCase
 {
     use RefreshDatabase, StripeFixtures;
@@ -44,14 +47,18 @@ class WebhookTest extends TestCase
     public function test_invalid_missing_stale_or_tampered_signatures_are_rejected(string $kind): void
     {
         $payment = $this->pendingPayment();
+        $snapshot = $payment->fresh()->getRawOriginal();
+        $remaining = app(MeetingQuotaService::class)->remaining($payment->user);
         $body = $this->stripePayload($payment);
         $timestamp = $kind === 'stale' ? time() - 600 : time();
         $signed = $kind === 'tampered' ? $body.' ' : $body;
         $signature = match ($kind) {
             'missing' => '', 'invalid' => 't='.$timestamp.',v1=invalid',
-            default => 't='.$timestamp.',v1='.hash_hmac('sha256', $timestamp.'.'.$signed, 'whsec_sa03_fake'),
+            default => StripeWebhookSignature::sign($signed, 'whsec_sa03_fake', $timestamp),
         };
         $this->stripePost($body, $signature)->assertStatus(400);
+        $this->assertSame($snapshot, $payment->fresh()->getRawOriginal());
+        $this->assertSame($remaining, app(MeetingQuotaService::class)->remaining($payment->user));
         $this->assertSame(0, $this->gateway->retrieves);
         $this->assertDatabaseCount('meeting_quota_transactions', 0);
         $this->assertDatabaseCount('stripe_webhook_events', 0);

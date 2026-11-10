@@ -12,8 +12,10 @@ use App\Notifications\GoogleCalendarFailure;
 use App\Services\GoogleCalendarAvailabilityService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\Support\MeetingActionTestCase;
 
+#[Group('external-api')]
 class TokenPrivacyTest extends MeetingActionTestCase
 {
     public function test_failed_refresh_storage_then_second_401_never_saves_dirty_tokens_with_authentication_state(): void

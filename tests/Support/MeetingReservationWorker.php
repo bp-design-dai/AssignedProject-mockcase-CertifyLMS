@@ -11,8 +11,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Tests\Support\ExternalApiGuard;
 
-require __DIR__.'/../../vendor/autoload.php';
+require __DIR__.'/../bootstrap.php';
 $app = require __DIR__.'/../../bootstrap/app.php';
 $request = Request::create('/enrollments/'.$argv[2].'/meetings', 'POST', [
     'scheduled_at' => $argv[3],
@@ -21,6 +22,7 @@ $request = Request::create('/enrollments/'.$argv[2].'/meetings', 'POST', [
 $app->instance('request', $request);
 $kernel = $app->make(Kernel::class);
 $kernel->bootstrap();
+ExternalApiGuard::install($app);
 
 if (! $app->environment('testing') || DB::getDriverName() !== 'mysql'
     || ! preg_match('/^testing(?:_\w+)?$/', DB::connection()->getDatabaseName())) {
