@@ -28,7 +28,7 @@ final class IndexAction
         $query = MockExam::query();
 
         if ($auth->role === UserRole::Admin) {
-            $query->with(['certification', 'createdBy', 'updatedBy']);
+            $query->with(['certification', 'createdBy', 'updatedBy'])->withCount('mockExamQuestions');
         }
 
         if ($auth->role === UserRole::Coach) {
