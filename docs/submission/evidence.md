@@ -75,22 +75,24 @@ PR #1〜#46のマージ、本文の「概要」「調査・設計判断」「実
 
 PRテンプレートでは、一覧・詳細・フォームは画像、状態遷移・モーダル・非同期更新は動画またはGIF、バグ修正は前後比較、リファクタリングはテスト結果による代替が案内されています。静止画像を順に並べたGIFは各状態を確認する資料です。連続した画面録画として扱いません。
 
-## 以前の監査で要確認だった9件
+## 監査の要確認9件の最終照合
 
-業務上の適合と提出資料の充足を区別して評価します。過去の監査で確認した業務仕様・テストの判定は適合です。下表は指摘された証跡・記載の再評価です。
+2026-11-12（JST）に[課題ガイドの概要シートC29](https://docs.google.com/spreadsheets/d/10MwISCEyE_5jc6ao2x5z4_vfzMmOTcymoyXH2VK5ssM/edit?gid=101#gid=101&range=C29)と[PRテンプレート](https://github.com/bp-design-dai/AssignedProject-mockcase-CertifyLMS/blob/a445746356c351a590f77cb19a6bbdff8f048e51/.github/PULL_REQUEST_TEMPLATE.md)を照合しました。動的機能は動画・GIF、バグ修正・改修は修正前後の比較を添付する指定です。前後比較の形式は画像に限定されていません。
 
-| ID | 判定 | 今回確認した証跡と残る確認事項 |
+| ID | 判定 | 証跡と確認手順 |
 |---|---|---|
 | S-B-02 | 適合 | READMEのPayment未実装という記載を更新し、購入履歴があるパックの削除制約をS-A-03の実装と一致させました。 |
-| S-A-01 | 要確認 | [本人確認済みの実接続結果](external-api-results.md#google-calendar-s-a-01)を公開資料に集約しました。OAuthから予定の同期までの操作動画・GIFは未収録です。 |
-| S-A-02 | 要確認 | [本人確認済みの実接続結果](external-api-results.md#gemini-s-a-02)に回答・会話保存・利用回数を記載しました。既存のUI画像に加え、操作動画・GIFの要否が残ります。 |
-| S-A-03 | 要確認 | [テスト決済・Webhook・台帳の確認結果](external-api-results.md#stripe-s-a-03)を公開資料に集約しました。Checkoutから回数反映までの操作動画・GIFは未収録です。 |
-| S-A-05 | 要確認 | 独立デモDBでポップオーバーを開き、全件既読で19件から0件になることを確認しました。[未読時の画面](media/notification-unread.jpg)・[既読後の画面](media/notification-read.jpg)は静止画です。操作動画・GIFの要否が残ります。 |
-| B-B-07 | 適合 | 独立デモDBで今回作成した未使用の架空分類を削除し、一覧から消え、成功通知が表示されることを確認しました。[削除操作前](media/category-before.jpg)・[成功通知](media/category-delete-success.jpg)は現行版の静止画です。 |
-| B-B-13 | 適合 | 独立環境で招待メールをMailpitに1通配送し、確認用パスワード不一致の拒否と、入力が一致した場合の登録を確認しました。[不一致エラー](media/onboarding-error.jpg)・[登録後のダッシュボード](media/onboarding-success.jpg)は、招待URLを除いた実際のHTTP応答の表示です。 |
-| B-A-02 | 要確認 | 独立デモDBで6問中4問正解、合格点60%に対し66.67%で合格を確認しました。[現行の結果画面](media/mock-exam-score.jpg)を追加しました。修正前バージョンの画面は未添付です。 |
-| B-A-03 | 要確認 | 独立デモDBで実践タームを保持していた検証用の受講登録を使い、未開始セッションをキャンセルすると基礎タームになることを確認しました。[キャンセル操作前](media/term-before-cancel.jpg)・[操作後](media/term-after-cancel.jpg)は現行版の画面です。修正前バージョンの画面は未添付です。 |
+| S-A-01 | 適合 | コーチの面談設定でモックOAuth連携後、受講生が既存予定の19時枠を除いた20時枠を予約し、取消します。モックの予定は1件から0件となり、既存予定は残りました。[操作GIF](media/s-a-01-operation.gif)・[本人による実接続確認](external-api-results.md#google-calendar-s-a-01) |
+| S-A-02 | 適合 | AI相談の新規会話から質問を送信し、モック回答と自動タイトルを確認します。再読み込み後とウィジェットでも同じ会話を表示しました。[操作GIF](media/s-a-02-operation.gif)・[本人による実接続確認](external-api-results.md#gemini-s-a-02) |
+| S-A-03 | 適合 | 残面談3回から3,000円の1回パックを選び、モックCheckoutから署名付きの合成イベントを決済処理に渡します。完了画面で反映済み、ダッシュボードで残面談4回を確認しました。[操作GIF](media/s-a-03-operation.gif)・[本人による実接続確認](external-api-results.md#stripe-s-a-03) |
+| S-A-05 | 適合 | 受講生の通知ベルで通知一覧を取得し、未読タブに切り替えます。全件既読でバッジと未読タブが2件から0件になりました。[操作GIF](media/s-a-05-operation.gif)・[既存のPC・モバイル画面とテスト](https://github.com/bp-design-dai/AssignedProject-mockcase-CertifyLMS/pull/38) |
+| B-B-07 | 適合 | 独立デモDBで未使用の架空分類を削除し、一覧から消え、成功通知が表示されました。[削除操作前](media/category-before.jpg)・[成功通知](media/category-delete-success.jpg) |
+| B-B-13 | 適合 | Mailpitに招待メールを1通配送し、確認用パスワード不一致の拒否と正常登録を確認しました。[不一致エラー](media/onboarding-error.jpg)・[登録後のダッシュボード](media/onboarding-success.jpg) |
+| B-A-02 | 適合 | 合格基準60%・5問中4問の同じ条件で、修正前0.80・不合格から修正後80.00%・合格に変わったことを確認しました。[PR #29の修正前後の採点比較CSVとHTTP検証](https://github.com/bp-design-dai/AssignedProject-mockcase-CertifyLMS/pull/29)・[現行版の結果画面（6問中4問）](media/mock-exam-score.jpg) |
+| B-A-03 | 適合 | 受験中などの有効セッションがなく、キャンセル済みのみのケースと未開始・キャンセル済みの混在ケースで、修正前は実践ターム、修正後は基礎タームです。修正後のDB値と2画面の表示を確認しました。[PR #30の修正前後比較CSVとHTTP検証](https://github.com/bp-design-dai/AssignedProject-mockcase-CertifyLMS/pull/30)・[現行版の取消操作前](media/term-before-cancel.jpg)・[操作後](media/term-after-cancel.jpg) |
 
-総合評価は適合35件、要確認6件、不適合確定0件です。要確認の6件は証跡形式または比較画像の不足です。各動画・GIFの提出要否は、[リポジトリのPRテンプレート](https://github.com/bp-design-dai/AssignedProject-mockcase-CertifyLMS/blob/a445746356c351a590f77cb19a6bbdff8f048e51/.github/PULL_REQUEST_TEMPLATE.md)を基準に正式な提出条件と照合してください。
+4本の操作GIFは、独立検証環境で実際に操作した順に画面を採取して連結したものです。Google・Gemini・Stripeはモックを使用しています。外部サービスでの確認範囲は実接続記録を参照してください。B-A-02とB-A-03の現行版スクリーンショットは操作確認の補足で、修正前後の比較には既存PRのテスト記録を使用しています。
+
+公開されている課題ガイドの証跡指定に基づき、今回の6件に追加の不足はありません。個別の点数配分や、GIFに連続した録画を求める追加条件は確認できていません。[提出方法（概要シートC33）](https://docs.google.com/spreadsheets/d/10MwISCEyE_5jc6ao2x5z4_vfzMmOTcymoyXH2VK5ssM/edit?gid=101#gid=101&range=C33)
 
 公開資料に含める新規記録はデモ用の架空データと集計値に限定しました。実アカウント、認証コード、決済ID、`.env`、メールの招待URL、DBの生データはローカル保管です。既存PRの閲覧可能性の確認は添付の内容全体の再監査を意味しません。
