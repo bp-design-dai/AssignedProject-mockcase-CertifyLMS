@@ -151,7 +151,7 @@ erDiagram
 
 ## 5. データと Seeder
 
-`sail artisan migrate:fresh --seed` で、いつでもデータベースを初期状態に戻せます。Seeder（`database/seeders/`）は次の世界を作ります。
+デモDBを作る場合は、新しいComposeプロジェクトで[READMEの環境構築手順](./README.md#環境構築手順)に従います。既存DBには初期化コマンドを実行しないでください。Seeder（`database/seeders/`）は次の世界を作ります。
 
 - **固定ログインアカウント**: admin 1 / コーチ 2 / 受講生 1（README の「ログインアカウント」参照）
 - **ライフサイクル網羅のデモユーザー**: 招待中 / 受講中 / 卒業 / 退会の各状態（`UserLifecycleSeeder`）

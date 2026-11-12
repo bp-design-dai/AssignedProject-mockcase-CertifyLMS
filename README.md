@@ -8,127 +8,124 @@
 
 | ロール | 機能 |
 |---|---|
-| 受講生（student） | 教材閲覧 / 演習問題・苦手分野ドリル / 模擬試験（分野別ヒートマップ・合格可能性スコア）/ 面談予約 / チャット / 学習時間・進捗・ストリーク管理 / 修了証の受領 |
-| コーチ（coach） | 教材・演習問題・模試の管理 / 担当受講生の進捗フォロー / 面談対応・面談メモ / チャット |
-| 管理者（admin） | ユーザー招待・管理 / 資格・資格分類マスタ管理 / 資格へのコーチ割当 / 面談回数の付与 / 全体ダッシュボード |
+| 受講生（student） | 教材閲覧 / 演習問題・苦手分野ドリル / 模擬試験（分野別ヒートマップ・合格可能性スコア）/ 面談予約 / チャット / 学習時間・進捗・ストリーク管理 / 修了証PDF / AI相談 / Stripeテストモードの面談パック購入 |
+| コーチ（coach） | 教材・演習問題・模試の管理 / 担当受講生の進捗フォロー / 面談対応・面談メモ / Google Calendar連携 / チャット |
+| 管理者（admin） | ユーザー招待・管理 / 資格・資格分類マスタ管理 / 資格へのコーチ割当 / 面談回数の付与・面談パック管理 / お知らせ配信 / 全体ダッシュボード |
 
 ## 動作環境
 
-- Docker Desktop / Docker Compose
-- 開発環境は Laravel Sail で構築します（PHP コンテナ・MySQL・Mailpit・phpMyAdmin を起動）
+- Docker Desktop、Docker Compose、Git、PowerShell 7。並行検証の例で使う `!override` はCompose 2.24.4以降が必要です。
+- PHP 8.5、Node.js 24、MySQL 8.4はコンテナ内で実行します。ホストへのPHP・Composer・Node.jsのインストールは不要です。
+- 新規クローン・新規DBボリュームで構築してください。既存の `.env`、DB、ボリュームを複製する必要はありません。
 
 ## 環境構築手順
 
-### 1. リポジトリの clone
+### 1. クローンとローカル設定
 
-```bash
-git clone <このリポジトリの URL>
-cd <リポジトリ名>
+```powershell
+git clone https://github.com/bp-design-dai/AssignedProject-mockcase-CertifyLMS.git
+cd AssignedProject-mockcase-CertifyLMS
+Copy-Item .env.example .env
+Add-Content .env "`nWWWUSER=1000`nWWWGROUP=1000"
 ```
 
-### 2. 環境変数ファイルの作成
+既定のWebは `http://localhost:8000`、Composeプロジェクトは `certify-lms`、開発用DBは `certify_lms` です。同じDocker上で既存環境と並行する場合は、新しいクローンの `.env` を変更し、プロジェクト名と公開ポートを分けます。`DB_HOST=mysql`、`DB_PORT=3306`、`MAIL_HOST=mailpit`、`MAIL_PORT=1025` はコンテナ間の設定です。
 
-```bash
-cp .env.example .env
+| 設定 | 並行検証の例 |
+|---|---|
+| `COMPOSE_PROJECT_NAME` / `DB_DATABASE` | `certify-lms-submission-check` / `certify_lms_submission` |
+| `APP_PORT` / `APP_URL` | `8022` / `http://localhost:8022` |
+| `VITE_PORT` / `FORWARD_DB_PORT` | `5192` / `3322` |
+| `FORWARD_MAILPIT_DASHBOARD_PORT` / `FORWARD_PHPMYADMIN_PORT` | `8042` / `8092` |
+| `SANCTUM_STATEFUL_DOMAINS` / `CORS_ALLOWED_ORIGINS` | `localhost:8022,127.0.0.1:8022` / `http://localhost:8022` |
+
+MailpitのSMTPをホストに公開する場合は `FORWARD_MAILPIT_PORT` に未使用ポートを指定します。アプリからのメール確認だけなら、検証環境と同様にCompose overrideでMailpitの公開ポートをUIだけにできます。別のホスト名やポートを使う場合は、OAuthを有効にする環境のコールバックURLも合わせます。検証時のCompose overrideは[新規構築記録](docs/submission/environment.md)を参照してください。
+
+### 2. `composer.lock` から依存を導入
+
+```powershell
+docker run --rm --user 1000:1000 `
+    -e COMPOSER_HOME=/tmp/certify-composer `
+    -e COMPOSER_PROCESS_TIMEOUT=1800 `
+    -e COMPOSER_MAX_PARALLEL_HTTP=4 `
+    -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/var/www/html `
+    --mount "type=bind,source=$($PWD.Path),target=/var/www/html" `
+    -w /var/www/html laravelsail/php84-composer:latest `
+    composer install --ignore-platform-reqs --prefer-dist --no-interaction --no-progress
 ```
 
-`.env.example` は Sail 向けに設定済みのため、コピーするだけでローカル開発を始められます（外部サービス連携のキーは後述）。
+初回は `vendor/laravel/sail` を用意するためにComposer用コンテナを使います。`--ignore-platform-reqs` はこの初回導入に限り、実行環境のPHP 8.5で次の手順の `composer check-platform-reqs` を通してください。取得エラー時はネットワークと書き込み権限を確認して同じ `composer install` を再実行します。ロックファイルはバージョン管理されているものを使用します。
 
-### 3. 依存パッケージのインストール（初回のみ）
-
-`vendor/` がまだ無いため、初回のみ Docker 経由で Composer を実行します。
+### 3. Docker Composeの起動
 
 ```bash
-docker run --rm \
-    -u "$(id -u):$(id -g)" \
-    -v "$(pwd):/var/www/html" \
-    -w /var/www/html \
-    laravelsail/php84-composer:latest \
-    composer install --ignore-platform-reqs
+docker compose config --services
+docker compose build laravel.test
+docker compose up -d --wait
+docker compose ps
+docker compose exec -T laravel.test composer check-platform-reqs
 ```
 
-### 4. Sail エイリアスの設定（推奨）
+`laravel.test`、`mysql`、`mailpit`、`phpmyadmin` の4サービスを確認します。MySQLの起動完了を待ち、対象のComposeプロジェクトを確認してから初期化に進みます。
+
+### 4. アプリと新規DBの初期化
 
 ```bash
-alias sail='./vendor/bin/sail'
+docker compose exec -T laravel.test php artisan key:generate
+docker compose exec -T laravel.test php artisan storage:link
+docker compose exec -T laravel.test php artisan tinker --execute='echo DB::selectOne("SELECT DATABASE() AS db")->db;'
+docker compose exec -T laravel.test php artisan migrate --seed --no-interaction
+docker compose exec -T laravel.test php artisan migrate:status
 ```
 
-以降のコマンドはこのエイリアス前提で記載します（未設定の場合は `./vendor/bin/sail` に読み替えてください）。
+APP_KEYの生成と `migrate --seed` は新規検証環境用です。表示されたDB名が新規環境のものと一致した場合に実行します。Seederはデモ用アカウント、教材、模試、受講登録、通知、修了証、AI相談履歴、決済サンプルを作成します。修了証PDFに必要な日本語フォントについては[修了証PDF](#修了証pdfs-a-04)を参照してください。既存環境の適用判断は[依存とマイグレーションの調査](docs/submission/environment.md#既存メイン環境の調査)に記載しています。
 
-### 5. コンテナの起動
+### 5. `package-lock.json` から依存を導入してビルド
 
 ```bash
-sail up -d
+docker compose exec -T laravel.test npm ci --include=dev
+docker compose exec -T laravel.test npm run build
 ```
 
-### 6. アプリケーションの初期化
+### 6. ログインとメールの確認
 
-```bash
-sail artisan key:generate
-sail artisan storage:link
-sail artisan migrate:fresh --seed
-```
+`APP_URL` を開き、各ロールでログインしてダッシュボードを確認します。受講生は教材・通知・面談、コーチは担当受講生と面談設定、管理者は模試一覧と面談パックを確認できます。招待などメールを伴う操作には[キューworker](#通知メールのdatabaseキューt-a-05)を起動します。
 
-`storage:link` は教材画像・プロフィール画像の配信に必要です。`migrate:fresh --seed` でテーブル作成とデモデータ投入が行われます（いつでも再実行してデータを初期状態に戻せます）。
-
-### 7. フロントエンドのビルド
-
-```bash
-sail npm install
-sail npm run build
-```
-
-Blade / CSS / JS を編集しながら開発する場合は、`build` の代わりに `sail npm run dev` を起動したままにしてください（Vite のホットリロードが効きます）。
-
-### 8. 動作確認
-
-http://localhost:8000 にアクセスし、下記の[ログインアカウント](#ログインアカウント)でログインできればセットアップ完了です。
-
-## 開発環境 URL
-
-| 用途 | URL |
+| 用途 | 既定のURL |
 |---|---|
 | アプリケーション | http://localhost:8000 |
-| phpMyAdmin（DB 確認） | http://localhost:8080 |
-| Mailpit（メール確認） | http://localhost:8025 |
+| Mailpit | http://localhost:8025 |
+| phpMyAdmin | http://localhost:8080 |
 
-アプリケーションが送信するメール（招待メールなど）はすべて Mailpit に届きます。実際のメールは送信されません。
+`.env.example` のSMTP設定では開発用メールをMailpitに配信します。招待・再設定メールのリンクや、認証情報を含む画面は共有資料から除外してください。
 
 ## ログインアカウント
 
-`migrate:fresh --seed` 後、以下の固定アカウントが使えます（パスワードはすべて `password`）。
+新規デモDB用の固定アカウントです。パスワードはすべて `password` です。
 
-| ロール | メールアドレス | 備考 |
+| ロール | メールアドレス | 用途 |
 |---|---|---|
-| 管理者 | admin@certify-lms.test | 全機能にアクセス可能 |
-| コーチ | coach@certify-lms.test | IT 系資格の担当 |
+| 管理者 | admin@certify-lms.test | 管理ダッシュボード、模試・面談パック・招待管理 |
+| コーチ | coach@certify-lms.test | IT系資格の担当 |
 | コーチ | coach2@certify-lms.test | ビジネス系資格の担当 |
-| 受講生 | student@certify-lms.test | 受講中の資格・学習履歴・面談などのデモデータ付き |
+| 受講生 | student@certify-lms.test | 教材・学習履歴・面談・通知のデモデータ付き |
 
-このほか、ライフサイクル（招待中 / 受講中 / 卒業 / 退会）を網羅したデモユーザーが投入されます。
+公開の会員登録はありません。新規ユーザーは、管理者が招待し、workerが送信した招待メールをMailpitで開いて登録します。
 
-> 本サービスは**招待制**です。公開の会員登録画面はありません。新規ユーザーを作るには、管理者でログイン → ユーザー管理から招待 → Mailpit で招待メールの URL を開く → オンボーディング登録、という流れになります。
+## 提出前の検証記録
+
+[全41チケット・PR #1〜#46の証跡一覧](docs/submission/evidence.md)、[新規構築と既存環境の調査](docs/submission/environment.md)、[外部APIの実接続確認結果](docs/submission/external-api-results.md)を参照してください。
 
 ## 質問掲示板（S-B-01）の追加データ
 
-既存環境を更新する場合は、既存データを初期化せず次を実行してください。
-
-```bash
-sail artisan migrate
-sail artisan db:seed --class=QaBoardSeeder
-```
+新規構築の `migrate --seed` に `QaBoardSeeder` が含まれます。
 
 新規環境では通常の Seeder に含まれます。公開資格ごとに未解決・解決済、回答なし・回答ありの質問を用意し、固定受講生を投稿者としています。再実行しても既存の質問・回答を上書きしません。
 受講生・担当コーチは `/qa-board`、管理者は `/admin/qa-board` から利用できます。投稿者による質問削除は本人かつ回答0件の場合のみ、管理者専用画面ではモデレーション削除が可能です。通知送信は本機能に含みません。
 
 ## 通知基盤（S-B-04）の追加データ
 
-既存環境ではデータを初期化せず、次を実行してください。
-
-```bash
-sail artisan migrate
-sail artisan db:seed --class=NotificationSeeder
-```
+新規構築の `migrate --seed` に `NotificationSeeder` が含まれます。
 
 固定受講生・コーチに、既存のチャット・質問・面談へ遷移する既読／未読のデモ通知を各25件追加します。再実行しても既存通知・既読状態を上書きせず、Seederからメールは送りません。新規環境では通常のSeederに含まれます。
 
@@ -148,7 +145,7 @@ T-A-05以降は業務トランザクションの確定後に配信ジョブを�
 
 ## 管理者お知らせ配信（S-B-08）
 
-既存環境では初期化せず `sail artisan migrate` を実行してください。デモ履歴を追加する場合のみ `sail artisan db:seed --class=AnnouncementSeeder` を実行します。全受講生・資格指定・ユーザー指定の3種類を追加し、通知も保存しますが、Seederからメールは送りません。再実行しても既存の履歴・通知・既読状態は変更しません。
+新規構築の `migrate --seed` に含まれます。既存環境の更新条件は[環境構築記録](docs/submission/environment.md#既存メイン環境の調査)を参照してください。デモ履歴を追加する場合のみ `docker compose exec -T laravel.test php artisan db:seed --class=AnnouncementSeeder` を実行します。全受講生・資格指定・ユーザー指定の3種類を追加し、通知も保存しますが、Seederからメールは送りません。再実行しても既存の履歴・通知・既読状態は変更しません。
 
 管理者の `/admin/announcements` で履歴閲覧、新規配信ができます。対象は `InProgress` の受講生のみで、資格指定は該当資格の受講登録者、ユーザー指定は選択した1名です。HTTPでは配信を受け付け、T-A-05のworkerが対象者を分割して配信します。編集・取消・再配信・予約送信はありません。受講生は通知一覧から本人宛の通知詳細へ進み、全文を読めます。
 
@@ -161,13 +158,20 @@ T-A-05以降は業務トランザクションの確定後に配信ジョブを�
 通知方法別の送信状態テーブルとT-A-05の追加マイグレーションが必要です。既存データは初期化せず、適用先DBを確認して運用手順に従ってください。配信には後述のdatabase workerを使用します。新規Seederは不要です。
 
 ```bash
-sail artisan notifications:send-meeting-reminders --window=eve
-sail artisan notifications:send-meeting-reminders --window=one_hour_before
+docker compose exec -T laravel.test php artisan notifications:send-meeting-reminders --window=eve
+docker compose exec -T laravel.test php artisan notifications:send-meeting-reminders --window=one_hour_before
 ```
 
 Schedulerはアプリのタイムゾーン（既定Asia/Tokyo）で、前日分を毎日18:00、1時間前分を5分間隔で実行します。前日分は翌日0:00:00〜23:59:59、1時間前分は実行時点の55〜65分後（両端を含む）の予約済み面談が対象です。受講生・担当コーチの両方がInProgressかつ正しいロールである場合のみ双方へ配信し、キャンセル済み・完了済み・削除済みの当事者は除外します。
 
-開発中は必要な間だけ `sail artisan schedule:work` を起動してください。サーバーでは毎分 `php artisan schedule:run` を実行する既存のScheduler運用が必要です。これらは他の既存定期処理も実行するため、検証時に不用意に起動せず、上の個別コマンドで確認できます。
+ローカルの独立環境でスケジュールと実行条件を確認します。`schedule:run` は現在時刻に実行対象となる処理だけを実行します。
+
+```bash
+docker compose exec -T laravel.test php artisan schedule:list
+docker compose exec -T laravel.test php artisan schedule:run
+```
+
+常時確認する場合は `docker compose exec laravel.test php artisan schedule:work` を前景で起動し、終了時にCtrl+Cで停止します。常設環境では同じアプリの `schedule:run` が毎分実行されるよう運用側で設定します。通知の実配送には別にqueue workerを起動します。
 
 面談・前日/1時間前・受信者・通知方法ごとにsent_atを保存します。DB通知と送信状態は同一Transactionで確定し、メールは送信処理が正常終了した場合のみ記録します。Schedulerは配信受付数・ジョブ投入失敗数を返し、投入失敗がある場合は終了コード1です。実配信の失敗はworkerが他の方法・受信者を妨げず再試行し、上限到達後はfailed_jobsへ記録します。Schedulerの再実行で試行回数をリセットせず、復旧はqueue:retryを使用します。既読日時や送信済み通知は変更せず、workerも面談・当事者の適格性を再確認します。DB一意制約と行ロックで重複起動を抑止しますが、SMTP受付後の通信断など外部配送の最終到達・完全なexactly-once配送までは保証しません。
 
@@ -179,9 +183,9 @@ Schedulerはアプリのタイムゾーン（既定Asia/Tokyo）で、前日分�
 
 作成時は下書き固定で、編集フォームから状態は変更できません。状態変更は `Draft → Published → Archived → Draft` の3種類のみ許可します。公開中、または購入履歴が1件でもあるパックの物理削除は拒否します。状態違反・削除不可はHTMLでは元の画面と `error` フラッシュ、JSONでは409、他ロールによる操作は403です。更新・状態変更・削除はTransaction内で対象行をロックし、最新状態を再確認します。
 
-入力はパック名100文字、説明2000文字、面談回数1〜100、価格0〜1,000,000円、Price ID 255文字、並び順0〜65535（既存マスタの検証パターン）に制限します。受講生向けの購入画面・Stripe連携・Webhook・面談回数付与は含めません。
+入力はパック名100文字、説明2000文字、面談回数1〜100、価格0〜1,000,000円、Price ID 255文字、並び順0〜65535に制限します。管理価格に0円を設定できます。受講生のCheckoutで購入できるのは公開中かつ50円以上のパックです。
 
-購入履歴の `Payment` と `payments` テーブルは後続のS-A-03の所有です。未導入の現在は提供済み画面と同様に履歴なしとして表示し、導入後は `meeting_pack_id` による読み取り専用の関連を使用します。削除ガードは決済状態やModelスコープに関係なく全履歴の存在を確認します。後続の購入処理では同じパック行のロックと外部キーによる参照整合性を維持してください。購入履歴ありの削除拒否は、testing DBに限って用意する最小テーブルで検証し、アプリに決済テーブルは先行追加していません。
+購入履歴はS-A-03で追加した `Payment` / `payments` を `meeting_pack_id` で参照します。削除ガードは決済状態を問わず、購入履歴があるパックの物理削除を拒否します。Checkout、Webhook、台帳付与の動作は[追加面談購入](#追加面談購入s-a-03stripeテストモード)を参照してください。
 
 ## プランのマスタ管理（S-B-03）
 
@@ -193,7 +197,7 @@ Schedulerはアプリのタイムゾーン（既定Asia/Tokyo）で、前日分�
 
 ## 個人学習目標（S-B-05）
 
-既存環境では初期化せず `sail artisan migrate` を実行してください。デモ目標が必要な場合のみ `sail artisan db:seed --class=EnrollmentGoalSeeder` を実行します。各受講登録に期日あり・期日なし・達成済みの目標を追加し、再実行でも既存の目標・達成状態を上書きしません。新規環境では通常のSeederに含まれます。
+新規構築の `migrate --seed` に含まれます。既存環境の更新条件は[環境構築記録](docs/submission/environment.md#既存メイン環境の調査)を参照してください。デモ目標が必要な場合のみ `docker compose exec -T laravel.test php artisan db:seed --class=EnrollmentGoalSeeder` を実行します。各受講登録に期日あり・期日なし・達成済みの目標を追加し、再実行でも既存の目標・達成状態を上書きしません。新規環境では通常のSeederに含まれます。
 
 受講登録詳細で目標を追加・閲覧でき、編集ページと達成／未達成の切替・物理削除を提供します。操作はInProgressの受講生本人のみ、担当資格の有効なコーチと管理者は閲覧専用です。既存の受講登録詳細・修了証の閲覧認可は変更せず、受講停止状態の本人には目標データ・操作を提供しません。目標は受講登録のSoftDelete時にも削除し、物理削除時は外部キーで連動します。復元・状態遷移履歴・達成通知はありません。
 
@@ -209,7 +213,7 @@ Schedulerはアプリのタイムゾーン（既定Asia/Tokyo）で、前日分�
 
 ## 受講生メモ（S-B-07）
 
-既存環境ではDBを初期化せず `sail artisan migrate` を実行してください。デモメモが必要な場合だけ `sail artisan db:seed --class=EnrollmentNoteSeeder` を実行します。通常の新規環境ではDatabaseSeederに含まれます。複数の受講登録に現在の担当コーチ・管理者のメモを追加し、既存の受講登録・担当割当・面談メモは変更しません。同じ受講登録と作成者にメモが既にあれば、再実行で本文を上書きしません。TOEICは既存の2コーチ共通担当で、他コーチのメモ閲覧と操作の出し分けを確認できます。
+新規構築の `migrate --seed` に含まれます。既存環境の更新条件は[環境構築記録](docs/submission/environment.md#既存メイン環境の調査)を参照してください。デモメモが必要な場合だけ `docker compose exec -T laravel.test php artisan db:seed --class=EnrollmentNoteSeeder` を実行します。通常の新規環境ではDatabaseSeederに含まれます。複数の受講登録に現在の担当コーチ・管理者のメモを追加し、既存の受講登録・担当割当・面談メモは変更しません。同じ受講登録と作成者にメモが既にあれば、再実行で本文を上書きしません。TOEICは既存の2コーチ共通担当で、他コーチのメモ閲覧と操作の出し分けを確認できます。
 
 受講登録詳細の提供済みコーチメモ欄から本文（必須・2000文字以内）を追加し、作成日時降順で閲覧します。担当資格はB-B-15と同じ有効な割当（本人ID・unassigned_at IS NULL）で判定します。担当コーチは他の担当コーチ・管理者のメモも閲覧できますが、編集・削除は自分のメモだけです。管理者は任意の受講登録に追加し、全メモを編集・削除できます。受講生は本人の受講登録でもメモ欄を表示せず、直接URL・POST/PATCH/DELETEも拒否します。作成者と対象受講登録はサーバーで固定し、本文以外の送信項目では変更しません。
 
@@ -217,19 +221,19 @@ Schedulerはアプリのタイムゾーン（既定Asia/Tokyo）で、前日分�
 
 ## テスト
 
-```bash
-sail artisan test                  # 全テスト実行
-sail artisan test --filter=Xxx    # クラス名・メソッド名で絞り込み
-```
-
-## コード整形
-
-Laravel Pint を使用しています。コミット前に実行してください。
+新規検証用Composeプロジェクトで実行します。MySQLの初回起動時にSailが作る `testing` DBを使用します。テストはテーブルを作り直すため、デモDBや実データ用DBには接続しないでください。次の確認結果が `testing` であり、接続先が検証用プロジェクトのMySQLであることを確認します。
 
 ```bash
-sail bin pint --dirty    # 変更ファイルのみ整形
-sail bin pint --test     # 整形漏れの確認（CI 相当のチェック）
+docker compose exec -T -e APP_ENV=testing -e DB_DATABASE=testing laravel.test php artisan tinker --execute='echo DB::selectOne("SELECT DATABASE() AS db")->db;'
+docker compose exec -T laravel.test mkdir -p /tmp/certify-lms-test-storage/app /tmp/certify-lms-test-storage/framework/cache /tmp/certify-lms-test-storage/framework/sessions /tmp/certify-lms-test-storage/framework/views /tmp/certify-lms-test-storage/logs
+docker compose exec -T -e APP_ENV=testing -e DB_DATABASE=testing -e LARAVEL_STORAGE_PATH=/tmp/certify-lms-test-storage laravel.test php artisan test --do-not-cache-result
+docker compose exec -T -e APP_ENV=testing -e DB_DATABASE=testing -e LARAVEL_STORAGE_PATH=/tmp/certify-lms-test-storage laravel.test php artisan test --group=external-api --do-not-cache-result
+docker compose exec -T laravel.test sh -lc 'node --test tests/Js/*.test.mjs'
+docker compose exec -T laravel.test ./vendor/bin/pint --test
+git diff --check
 ```
+
+独立環境でのPHP全体テストは **2,313成功・0失敗・10,418 assertions** です。外部APIテストの通信ガードは[外部APIのモックテスト](#外部apiのモックテストt-a-04)を参照してください。全体テストとグループ実行は同じ `testing` DBを使用するため、順に実行します。設定キャッシュを作成した環境では、検証用プロジェクト側で `docker compose exec -T laravel.test php artisan config:clear` を実行してからDB名を確認してください。
 
 ## 使用技術
 
@@ -242,14 +246,18 @@ sail bin pint --test     # 整形漏れの確認（CI 相当のチェック）
 - Pusher（チャットのリアルタイム配信）
 - Docker（Laravel Sail）
 
-## 環境変数
+## 外部APIキー未設定時の動作
 
-`.env.example` をコピーするだけで、すべての機能がローカルで動作します（メールは Mailpit に配信されます）。
+`.env.example` のまま新規構築し、マイグレーション・Seeder・Viteビルドを完了すると、ログイン、教材、模試、従来の面談、通知、修了証などを確認できます。外部連携を有効にする場合は、対象環境の `.env` に本人が設定します。
 
-- `PUSHER_*` — チャットのリアルタイム配信に使用します。有効にする場合は Pusher のキーを取得して設定し、`BROADCAST_DRIVER=pusher` に変更してください。未設定（既定の `BROADCAST_DRIVER=log`）でもメッセージの送受信自体は動作し、相手画面へのリアルタイム反映のみ行われません
+| 連携 | キー未設定時の動作 |
+|---|---|
+| Google Calendar | 連携開始にはOAuth設定が必要です。未連携でも従来のLMSの空き枠判定・面談予約を使えます。 |
+| Gemini | 既定の `AI_CHAT_ENABLED=false` ではUIを非表示にし、AI相談の画面・APIは404です。機能をONにしてキーが空の場合は利用不可の案内を表示し、APIは503です。 |
+| Stripe | 面談回数の既存台帳を利用できます。決済設定がなければ購入開始は503です。決済確認にはStripeサンドボックスとWebhook署名の設定が必要です。 |
+| Pusher | 既定の `BROADCAST_DRIVER=log` でメッセージは保存されます。相手画面へのリアルタイム反映にはPusherの設定が必要です。 |
 
-新しい環境変数やセットアップ手順を追加した場合は、`.env.example` と本 README に追記し、チームの誰でも環境を再現できる状態を保ってください。
-
+外部APIの自動テストはモックを使います。本人による実接続結果と、今回のキーなし検証の範囲は[外部API確認結果](docs/submission/external-api-results.md)にまとめています。
 
 ## Google Calendar連携（S-A-01）
 
@@ -272,14 +280,7 @@ GOOGLE_CALENDAR_CLIENT_SECRET=
 GOOGLE_CALENDAR_REDIRECT_URI=http://localhost:8000/settings/google-calendar/callback
 ```
 
-既存環境には追加マイグレーションだけを適用します（`migrate:fresh`や既存データ削除は不要）。設定キャッシュを使用している環境では設定変更後に再生成してください。
-
-```bash
-sail artisan migrate
-sail npm run build
-# 設定キャッシュを運用している環境のみ
-sail artisan config:cache
-```
+新規の専用環境では[環境構築手順](#環境構築手順)でスキーマを用意します。設定キャッシュがある場合は、`.env` 変更後に対象の検証環境で `docker compose exec -T laravel.test php artisan config:clear` を実行します。
 
 未設定・未連携の場合、従来の面談機能はGoogle通信なしで利用できます。未設定の連携開始は設定確認メッセージを表示します。
 Googleへのログイン・本人認証・同意・秘密情報の入力は利用者本人が実施します。実API検証は既存の私用予定を持たない検証アカウントで行ってください。
@@ -306,7 +307,7 @@ GoogleのTesting公開状態やOAuthポリシーによるトークン有効期�
 
 `GoogleCalendarGateway`を差し替えて外部通信なしで検証できます。SDK境界のテストはGuzzleのMockHandlerを使用し、実Googleへ接続しません。
 `GoogleCalendarCredentialFactory`と`GoogleCalendarDemoSeeder`は分離した`testing` DB専用の合成データです。Seederは連携済み/未連携コーチを新規作成し、local/production DBでは実行を拒否します。既存デモコーチにダミートークンを付けません。
-実APIへの連携・終日/繰り返し/予定なし・作成/削除の最終疎通は、本人がOAuth設定を用意した後に検証アカウントで実施します。
+本人によるOAuth・予定ありの除外・作成・削除の確認結果と、実APIで未確認の条件は[外部API確認結果](docs/submission/external-api-results.md#google-calendar-s-a-01)を参照してください。
 
 公式資料: [OAuth Web Server](https://developers.google.com/identity/protocols/oauth2/web-server)、[FreeBusy](https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query)、[予定作成](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert)、[予定削除](https://developers.google.com/workspace/calendar/api/v3/reference/events/delete)。
 
@@ -327,14 +328,14 @@ GEMINI_TIMEOUT=30
 新規の検証環境で追加マイグレーションを適用し、アセットをビルドしてください。既存データの初期化は不要です。デモ履歴が必要な場合だけ`AiChatSeeder`を実行します。通常の新規DB用`DatabaseSeeder`にも含まれ、教材付き・全般・応答失敗の会話を用意します。SeederからGeminiへ通信せず、再実行で既存の会話・メッセージは上書きしません。
 
 ```bash
-sail artisan migrate
-sail artisan db:seed --class=AiChatSeeder
-sail npm run build
+docker compose exec -T laravel.test php artisan migrate
+docker compose exec -T laravel.test php artisan db:seed --class=AiChatSeeder
+docker compose exec -T laravel.test npm run build
 ```
 
 実データ用DBへ適用しない検証では、`APP_ENV=testing`・`DB_DATABASE=testing`を明示した独立テストDBを使用してください。未適用の実データ用DBでは`AI_CHAT_ENABLED=false`を維持します。OFF時はUIを隠し、AI用テーブルをルートモデルバインディングで参照する前に画面・APIを404にします。ONでもAPIキー未設定なら、利用できない旨を表示し、APIは503で拒否します。設定キャッシュの運用時は変更後に専用環境のキャッシュを再生成してください。
 
-APIキーは本人がGoogle AI Studioで検証用プロジェクトのキーを作成し、対象環境の`.env`へ直接入力します。Googleログイン・利用規約への同意・課金設定の操作は本人が行います。値をチャット・Git・PR・スクリーンショットへ貼らず、フロント用の`VITE_`変数にも入れないでください。`GEMINI_MODEL`はそのアカウントで利用可能なモデルIDを指定します。提供済みUIの旧モデル名を固定表示せず、設定例はGoogleの後継推奨に合わせています。実接続前に利用可能モデル・キーの権限・料金とクォータを本人が確認してください。
+APIキーは本人がGoogle AI Studioで検証用プロジェクトのキーを作成し、対象環境の`.env`へ直接入力します。Googleログイン・利用規約への同意・課金設定の操作は本人が行います。値をチャット・Git・PR・スクリーンショットへ貼らず、フロント用の`VITE_`変数にも入れないでください。`GEMINI_MODEL`はそのアカウントで利用可能なモデルIDを指定します。設定例のモデルを利用できるかは検証用アカウントで確認してください。実接続前に利用可能モデル・キーの権限・料金とクォータを本人が確認してください。
 
 送信は`generateContent`への同期REST呼出しで、APIキーは`x-goog-api-key`ヘッダにだけ渡します。接続タイムアウト5秒、応答タイムアウトは既定30秒です。自動再送はせず、応答失敗・空応答・遮断をエラーとして保存します。リクエスト本文・APIキー・プロバイダーのエラー本文をログへ出しません。
 
@@ -353,8 +354,8 @@ APIキーは本人がGoogle AI Studioで検証用プロジェクトのキーを�
 外部通信なしの専用テストとJavaScript状態テスト:
 
 ```bash
-APP_ENV=testing DB_DATABASE=testing sail artisan test tests/Feature/Http/AiChat tests/Unit/Integrations/GeminiGatewayTest.php
-sail exec laravel.test node --test tests/Js/ai-chat-state.test.mjs
+docker compose exec -T -e APP_ENV=testing -e DB_DATABASE=testing -e LARAVEL_STORAGE_PATH=/tmp/certify-lms-test-storage laravel.test php artisan test tests/Feature/Http/AiChat tests/Unit/Integrations/GeminiGatewayTest.php
+docker compose exec -T laravel.test node --test tests/Js/ai-chat-state.test.mjs
 ```
 
 並行テストはMySQLの独立プロセス・独立接続を使い、`testing` DB以外ではマイグレーションを拒否します。`SA02_CONCURRENCY_REPORT`で接続ID・ロック待機・結果のJSONLを保存できます。実接続では、安全な独立Web・DBで本人がキーを入力した後、ウィジェットとフル画面の送信・履歴・再送・タイトル・上限案内を確認してください。実APIの利用可否・速度・課金はモックテストの成功だけでは確認できません。
@@ -363,11 +364,11 @@ sail exec laravel.test node --test tests/Js/ai-chat-state.test.mjs
 
 資格紹介ページでは公開されている資格名を相談の文脈として保持します。未登録でも既存の資格紹介ページを閲覧できますが、教材本文は本人の有効な受講登録と既存Gateで許可されたSectionだけを付与します。公開停止後は資格情報も新たなプロンプトに付与しません。
 
-AI相談の画面回帰テストは `sail npm run test:ai-chat` で実行します。既存の状態保持テストに加え、テスト専用のjsdomで実際のフォーム・メッセージDOMと本番のJSを動かし、タイトルの同期・未変更保存・ON/OFF・空状態の解除を確認します。`npm ci`では開発依存もインストールしてください（検証したSail内Nodeは24.14.1）。タイトル未変更時はtitleを再送せず、自動更新設定だけを送ります。入力中のタイトルや明示的なスイッチ操作は、AI回答が到着しても上書きしません。
+AI相談の画面回帰テストは `docker compose exec -T laravel.test npm run test:ai-chat` で実行します。既存の状態保持テストに加え、テスト専用のjsdomで実際のフォーム・メッセージDOMと本番のJSを動かし、タイトルの同期・未変更保存・ON/OFF・空状態の解除を確認します。`npm ci`では開発依存もインストールしてください。タイトル未変更時はtitleを再送せず、自動更新設定だけを送ります。入力中のタイトルや明示的なスイッチ操作は、AI回答が到着しても上書きしません。
 
 AI回答の日本語括弧に隣接する太字は、通常のCommonMark判定を優先した限定的なトークナイザー補助で表示します。コード・エスケープ・リンク先を区別し、変換後のDOMPurifyを維持します。ウィジェットの幅制御は専用CSSに限定し、通常文は折り返し、コードと幅広い表はそれぞれの内側でスクロールします。`npm run test:ai-chat`にはMarkdown・保存履歴・新規回答・再送・幅制約のDOM回帰テストも含まれます。
 
-### 追加面談購入（S-A-03、Stripeテストモード）
+## 追加面談購入（S-A-03、Stripeテストモード）
 
 学習中の受講生は `/meeting-quota/checkout` から公開中かつ50円以上の面談パックを購入できます。購入開始時に購入者とパックを行ロック下で再確認し、名称・円建て金額・面談回数を `payments` に保存します。Checkout Sessionは保存値から動的に作成します。パックの `stripe_price_id` やブラウザから渡された価格は使用しません。カード入力はStripe側だけで行います。
 
@@ -378,7 +379,7 @@ AI回答の日本語括弧に隣接する太字は、通常のCommonMark判定�
 **独立環境での接続手順**
 
 1. 作業元と別のチェックアウト・Composeプロジェクト・DBボリュームを使います。例: `CertifyLMS-sa03-live`、`certify-lms-sa03-live`、`certify_lms_sa03_live`。Webは `http://localhost:8013` を使用し、8000/8011/8012や既存DBを流用しません。独立側の `.env.example` から `.env` を作り、`APP_URL` とWebポート、DB名、セッションCookieを分けます。
-2. 接続先が独立DBであることを確認してから、その環境にだけ `php artisan migrate` と必要なデモデータ用 `php artisan db:seed`、`npm ci`、`npm run build` を実行します。`PaymentSeeder` はローカル/テスト用の決済状態別サンプルを生成し、実際のStripe通信は行いません。決済キー未設定でも従来の台帳履歴は利用でき、購入開始は503になります。
+2. [環境構築手順](#環境構築手順)を使い、独立DBにマイグレーションと必要なデモデータを適用し、フロントエンドをビルドします。`PaymentSeeder` はローカル/テスト用の決済状態別サンプルを生成し、実際のStripe通信は行いません。決済キー未設定でも従来の台帳履歴は利用でき、購入開始は503になります。
 3. 本人が[StripeサンドボックスのAPIキー](https://docs.stripe.com/keys)でテスト用Secret Keyを確認し、独立環境の `STRIPE_SECRET_KEY` に入力します。実装は `sk_test_` のキーだけを許可し、ライブモードの通知も拒否します。
 4. 本人が[Stripe CLI](https://docs.stripe.com/stripe-cli/use-cli)で同じサンドボックスにログインし、次のコマンドでWebhookを転送します。CLIが表示する署名シークレットを独立環境の `STRIPE_WEBHOOK_SECRET` に直接入力します。公開URLを使う場合は、テストモードのWorkbenchでそのHTTPSエンドポイントを登録し、そこで発行された別の署名シークレットを使用してください。
 
@@ -386,15 +387,15 @@ AI回答の日本語括弧に隣接する太字は、通常のCommonMark判定�
    stripe listen --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired --forward-to http://localhost:8013/webhooks/stripe
    ```
 
-5. 独立環境で `php artisan config:clear` を実行し、学習中の受講生でログインします。購入パックを選び、Stripeのテスト表示を確認してから[公式のテストカード](https://docs.stripe.com/testing)で決済します。支払確定のWebhookが2xxとなり、完了画面・ダッシュボード・予約画面に購入回数が反映されることを確認します。中断や未払いでは残数が増えず、同じイベントの再送や完了画面の更新でも付与は一度だけです。
+5. 独立環境で `docker compose exec -T laravel.test php artisan config:clear` を実行し、学習中の受講生でログインします。購入パックを選び、Stripeのテスト表示を確認してから[公式のテストカード](https://docs.stripe.com/testing)で決済します。支払確定のWebhookが2xxとなり、完了画面・ダッシュボード・予約画面に購入回数が反映されることを確認します。中断や未払いでは残数が増えず、同じイベントの再送や完了画面の更新でも付与は一度だけです。
 
 キーと署名シークレットはサーバー側の独立 `.env` のみに設定し、`VITE_` 変数、Git、PR、ログ、画面キャプチャには含めません。既存DBへのマイグレーションや決済用テーブルを含む環境の初期化は行いません。
 
-自動テストは外部通信をモックします。Sailの隔離 `testing` DBで `APP_ENV=testing DB_DATABASE=testing sail artisan test tests/Feature/Stripe tests/Unit/Integrations/StripeApiCheckoutGatewayTest.php` を実行します。署名の検証には実SDKを使い、並行Webhookは別々のMySQL接続が同じ行ロックを待つことを確認します。
+自動テストは外部通信をモックします。独立した `testing` DBで `docker compose exec -T -e APP_ENV=testing -e DB_DATABASE=testing -e LARAVEL_STORAGE_PATH=/tmp/certify-lms-test-storage laravel.test php artisan test tests/Feature/Stripe tests/Unit/Integrations/StripeApiCheckoutGatewayTest.php` を実行します。署名の検証には実SDKを使い、並行Webhookは別々のMySQL接続が同じ行ロックを待つことを確認します。
 
 公式仕様: [Checkoutの付与処理](https://docs.stripe.com/checkout/fulfillment?ui=full-page)、[Webhook署名](https://docs.stripe.com/webhooks/signature)。
 
-### 修了証PDF（S-A-04）
+## 修了証PDF（S-A-04）
 
 修了証受領時に既存テンプレートをmPDFでA4横の日本語PDFへ変換し、非公開ディスクの `storage/app/private/certificates` に保存します。取得先は認証・認可付きの `/certificates/{certificate}/download` です。過去の発行記録にPDF実体がない場合は404になります。新規に投入するデモ修了証にはPDF実体が付きます。
 
@@ -407,20 +408,18 @@ SailではPlaywright依存に含まれるIPAゴシック（`/usr/share/fonts/ope
 チャット・Q&A返信・面談予約/キャンセル、前日/1時間前リマインダー、管理者お知らせ、招待メール、パスワード再設定メールを `notifications` キューで処理します。既存のコーチ担当変更リスナーなどは `default` キューを利用するため、両方を起動します。配信内容・対象・チャネル、Schedulerの時刻は維持します。
 
 ```bash
-php artisan queue:work database --queue=notifications,default --sleep=1 --tries=4 --timeout=60
+docker compose exec laravel.test php artisan queue:work database --queue=notifications,default --sleep=1 --tries=4 --timeout=60
 ```
 
 DB接続は `after_commit=true`、ジョブもcommit後に投入します。rollbackされた業務処理の通知は送信しません。workerが停止している間はジョブがDBに残り、配信されません。workerはWebとは別プロセスで常駐監視してください。設定・コード更新後は次を実行し、監視プロセスがworkerを再起動する構成にします。`queue:restart` にはworkerとコマンドで共通の永続キャッシュが必要です。Redisを追加せず、同じ保存領域の `CACHE_DRIVER=file` などを使用してください（`array` はプロセス間で共有されません）。
 
 ```bash
-php artisan queue:restart
-php artisan queue:failed
-php artisan queue:retry <失敗ジョブのUUID>
-# 原因解消と対象確認後、全失敗ジョブを再投入する場合
-php artisan queue:retry all
+docker compose exec -T laravel.test php artisan queue:restart
+docker compose exec -T laravel.test php artisan queue:failed
+docker compose exec -T laravel.test php artisan queue:retry '失敗ジョブのUUID'
 ```
 
-停止は実行中ジョブの完了を待つ `SIGTERM` を使用します。新規配信ジョブは最大4回実行（初回+3回）、待機は60/300/900秒です。timeout=60秒よりdatabase接続のretry_after=120秒を長くし、処理中ジョブの早過ぎる再取得を避けます。上限到達後は標準の `failed_jobs` に記録し、原因解消後に `queue:retry` で復旧します。`queue:retry` は実行回数をリセットします。`sync` は開発・テスト互換用で、非同期配信やworkerの再試行を提供しません。
+ローカルでは別ターミナルから `queue:restart` を実行すると、処理中のジョブの完了後にworkerが終了します。再開時は `queue:work` を起動し直します。運用環境ではプロセス監視で再起動し、停止は `SIGTERM` で処理中のジョブの完了を待ちます。新規配信ジョブは最大4回実行（初回+3回）、待機は60/300/900秒です。timeout=60秒よりdatabase接続のretry_after=120秒を長くし、処理中ジョブの早過ぎる再取得を避けます。上限到達後は標準の `failed_jobs` に記録し、原因解消後に `queue:retry` で復旧します。`queue:retry` は実行回数をリセットします。`sync` は開発・テスト互換用で、非同期配信やworkerの再試行を提供しません。
 
 管理者お知らせのHTTP応答は「配信受付」です。workerが100人ずつ対象者を読み取り、受信者ごとのジョブに分割します。`announcement_dispatches` に処理状況、`announcement_recipients` に各受信者の結果を保存します。全対象が完了して1件以上成功した場合だけ従来の配信履歴へ実績を記録します。0件・全件失敗では履歴を作りません。成功とは既存仕様どおり当該受信者のアプリ内通知とメール双方の成功です。失敗を再投入して成功した場合も同じ履歴の件数を再集計し、二重計上しません。一覧の「最近の配信受付」は画面更新で確認します。
 
@@ -448,11 +447,11 @@ Google Calendar・Gemini・Stripeの関連テストには、PHPUnit 10の `exter
 
 ```bash
 # 外部API関連だけ
-php artisan test --group=external-api
+docker compose exec -T -e APP_ENV=testing -e DB_DATABASE=testing -e LARAVEL_STORAGE_PATH=/tmp/certify-lms-test-storage laravel.test php artisan test --group=external-api
 # 外部API関連を除外（通信ガード自体は有効）
-php artisan test --exclude-group=external-api
+docker compose exec -T -e APP_ENV=testing -e DB_DATABASE=testing -e LARAVEL_STORAGE_PATH=/tmp/certify-lms-test-storage laravel.test php artisan test --exclude-group=external-api
 # 通常の全体テストにも含まれる
-php artisan test
+docker compose exec -T -e APP_ENV=testing -e DB_DATABASE=testing -e LARAVEL_STORAGE_PATH=/tmp/certify-lms-test-storage laravel.test php artisan test
 ```
 
 実APIキーは不要です。テスト起動時に連携用キーの設定を空にし、必要なケースだけダミー値を設定します。GeminiはLaravel HTTP fake、Google SDKはGuzzle MockHandlerまたはGatewayモック、Stripe SDKはテスト用HTTPクライアントまたはCheckout Gatewayモックを使用します。Webhook署名はテスト専用ヘルパーで受信本文の正確なバイト列から生成し、実サービスへ送信しません。
@@ -462,3 +461,9 @@ php artisan test
 明示的なモック用HTTPクライアントへの差し替えは各SDKの単体テストで許可しています。ガードは現在の3連携の通信境界を保護するもので、任意のPHPソケットや独自の直接cURL呼び出しを横断的に遮断するものではありません。新たな外部通信は既存の境界を使い、テストで必ずモックしてください。追加の防御として、専用の内部Dockerネットワークなど外部への経路がない検証環境で実行できます。
 
 Geminiの一時障害からの再試行は、既存仕様のユーザーによる再送として検証します。失敗・再送は日次利用回数を消費し、上限後は外部呼び出しを行いません。本チケットでは自動リトライや連携機能の業務仕様を追加・変更しません。
+
+## セキュリティと運用上の制約
+
+ローカルの固定ユーザーと `APP_DEBUG=true` はデモ環境用です。公開環境では `APP_DEBUG=false` とし、HTTPS、環境ごとの認証情報、DB・ログ・バックアップの最小権限を設定します。
+
+PR #44の依存更新とPR #45のメール入力対策は `main` に反映済みです。Laravel 10の残存告知は[確認記録](docs/submission/environment.md#セキュリティ確認)を参照してください。Google連携トークンの保管、SMTP受理直後の停止時に起こり得る再送、Stripe返金の手動運用など、連携ごとの制約は各節に記載しています。
